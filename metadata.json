@@ -1,0 +1,6 @@
+{
+  "name": "ChestPad Medical Dashboard",
+  "description": "Real-time physiological data monitoring dashboard with ECG, SpO2, and advanced hemodynamic analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
