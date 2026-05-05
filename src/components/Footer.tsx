@@ -24,7 +24,7 @@ const Footer: React.FC = () => {
   };
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 px-4 py-1.5 flex justify-between items-center bg-black/40 backdrop-blur-sm border-t border-white/5 z-[40]">
+    <div className="w-full px-4 py-2 flex justify-between items-center bg-black/40 backdrop-blur-sm border-t border-white/5 z-[40]">
       <div className="flex items-center gap-1.5">
         <Battery size={10} className={cn("opacity-60", getBatteryColor())} />
         <span className="text-[8px] font-bold text-slate-500 uppercase tracking-[0.2em]">

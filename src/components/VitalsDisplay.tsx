@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowUp, ArrowDown } from 'lucide-react';
 import useStore from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils/cn';
@@ -7,19 +7,16 @@ import { SeverityLevel, VitalStatus } from '../types';
 
 const SeverityArrows: React.FC<{ trend: 'up' | 'down' | 'stable'; severity: SeverityLevel; color: string; size: number }> = ({ trend, severity, color, size }) => {
   if (severity === 'normal') {
-    return trend === 'up' ? <ChevronUp size={size} className={color} /> : <ChevronDown size={size} className={color} />;
+    return null;
   }
   
-  const count = severity === 'moderate' ? 1 : 2;
-  return (
-    <div className="flex flex-col -gap-4">
-      {Array.from({ length: count }).map((_, i) => (
-        trend === 'up' ? 
-          <ChevronUp key={i} size={size} className={cn(color, i > 0 && "-mt-4")} /> : 
-          <ChevronDown key={i} size={size} className={cn(color, i > 0 && "-mt-4")} />
-      ))}
-    </div>
-  );
+  if (trend === 'up') {
+    return <ArrowUp size={size} className={color} strokeWidth={2} />;
+  } else if (trend === 'down') {
+    return <ArrowDown size={size} className={color} strokeWidth={2} />;
+  }
+
+  return null;
 };
 
 const VitalCard: React.FC<{ 
@@ -30,40 +27,37 @@ const VitalCard: React.FC<{
   showUnit?: boolean;
 }> = ({ label, status, color = "text-white", size = 'normal', showUnit = true }) => (
   <div className="flex flex-col items-center">
-    <div className="flex items-start gap-1">
-      <motion.span 
-        key={String(status.value)}
-        initial={{ opacity: 0, y: status.trend === 'up' ? 5 : -5 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={cn(
-          "font-medium tracking-tighter transition-all duration-300",
-          size === 'xl' ? 'text-8xl' : size === 'normal' ? 'text-5xl' : 'text-3xl',
-          color
-        )}
-      >
-        {status.value}
-      </motion.span>
-      <div className={cn(
-        "flex flex-col items-start transition-all duration-300",
-        size === 'xl' ? 'mt-2' : size === 'normal' ? 'mt-1.5' : 'mt-1'
-      )}>
-        {showUnit && (
+    <div className="flex items-center gap-1">
+      <div className="flex items-baseline">
+        <motion.span 
+          key={String(status.value)}
+          initial={{ opacity: 0, y: status.trend === 'up' ? 5 : -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn(
+            "font-light tracking-tight transition-all duration-300",
+            size === 'xl' ? 'text-7xl' : size === 'normal' ? 'text-4xl' : 'text-2xl',
+            color
+          )}
+        >
+          {status.value}
+        </motion.span>
+        {showUnit && status.unit && (
           <span className={cn(
-            "font-medium transition-all duration-300",
+            "font-light transition-all duration-300 ml-1",
             size === 'xl' ? 'text-2xl' : size === 'normal' ? 'text-lg' : 'text-xs',
             color
           )}>{status.unit}</span>
         )}
-        <SeverityArrows 
-          trend={status.trend} 
-          severity={status.severity} 
-          color={color} 
-          size={size === 'xl' ? 32 : size === 'normal' ? 24 : 16} 
-        />
       </div>
+      <SeverityArrows 
+        trend={status.trend} 
+        severity={status.severity} 
+        color={color} 
+        size={size === 'xl' ? 36 : size === 'normal' ? 24 : 18} 
+      />
     </div>
     <span className={cn(
-      "font-medium text-slate-500 uppercase tracking-widest mt-1 transition-all duration-300",
+      "font-normal text-slate-500 uppercase tracking-widest mt-1 transition-all duration-300",
       size === 'sm' ? 'text-[8px]' : 'text-xs'
     )}>{label}</span>
   </div>
@@ -129,18 +123,17 @@ const VitalsDisplay: React.FC<VitalsDisplayProps> = ({ compact }) => {
 
       {/* Decorative Brackets pointing to center BPM (Mockup style) */}
       <div className={cn(
-        "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full pointer-events-none z-0 transition-all duration-300",
-        compact ? "h-[85%]" : "h-[70%]"
+        "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full pointer-events-none z-0 transition-all duration-300"
       )}>
         <svg className="w-full h-full" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
           {/* Top bracket (V shape) */}
-          <path d={compact ? "M 150 60 L 200 85 L 250 60" : "M 120 40 L 200 80 L 280 40"} fill="none" stroke="#334155" strokeWidth={compact ? "1" : "1.5"} opacity="0.6" strokeLinecap="square" />
+          <path d={compact ? "M 170 85 L 200 115 L 230 85" : "M 160 55 L 200 95 L 240 55"} fill="none" stroke="#334155" strokeWidth="1" opacity="0.6" strokeLinecap="square" />
           {/* Bottom bracket (^ shape) */}
-          <path d={compact ? "M 150 240 L 200 215 L 250 240" : "M 120 260 L 200 220 L 280 260"} fill="none" stroke="#334155" strokeWidth={compact ? "1" : "1.5"} opacity="0.6" strokeLinecap="square" />
+          <path d={compact ? "M 170 215 L 200 185 L 230 215" : "M 160 245 L 200 205 L 240 245"} fill="none" stroke="#334155" strokeWidth="1" opacity="0.6" strokeLinecap="square" />
           {/* Left bracket ( > shape) */}
-          <path d={compact ? "M 110 120 L 140 150 L 110 180" : "M 90 110 L 130 150 L 90 190"} fill="none" stroke="#334155" strokeWidth={compact ? "1" : "1.5"} opacity="0.6" strokeLinecap="square" />
+          <path d={compact ? "M 115 120 L 145 150 L 115 180" : "M 75 110 L 115 150 L 75 190"} fill="none" stroke="#334155" strokeWidth="1" opacity="0.6" strokeLinecap="square" />
           {/* Right bracket ( < shape) */}
-          <path d={compact ? "M 290 120 L 260 150 L 290 180" : "M 310 110 L 270 150 L 310 190"} fill="none" stroke="#334155" strokeWidth={compact ? "1" : "1.5"} opacity="0.6" strokeLinecap="square" />
+          <path d={compact ? "M 285 120 L 255 150 L 285 180" : "M 325 110 L 285 150 L 325 190"} fill="none" stroke="#334155" strokeWidth="1" opacity="0.6" strokeLinecap="square" />
         </svg>
       </div>
     </div>

@@ -19,6 +19,8 @@ const WaveformContainer: React.FC = () => {
   const { waveforms } = usePhysiologicalData();
   const vitals = useStore(state => state.vitals);
 
+  const [isListening, setIsListening] = React.useState(false);
+
   const leads = ['Lead I', 'Lead II', 'Lead III', 'V1', 'V2'];
 
   if (viewMode === 'Normal') {
@@ -27,11 +29,21 @@ const WaveformContainer: React.FC = () => {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-white">ECG Monitoring</span>
-            <CustomDropdown 
-              options={leads} 
-              current={selectedLeadIndex} 
-              onSelect={setSelectedLeadIndex} 
-            />
+            <div className="relative group">
+              <select
+                value={selectedLeadIndex}
+                onChange={(e) => setSelectedLeadIndex(Number(e.target.value))}
+                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+              >
+                {leads.map((lead, i) => (
+                  <option key={lead} value={i} className="bg-slate-900 text-white">{lead}</option>
+                ))}
+              </select>
+              <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors flex items-center gap-1">
+                {leads[selectedLeadIndex]}
+                <ChevronDown size={14} className="opacity-40" />
+              </span>
+            </div>
             <div className="flex items-center gap-1">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Good</span>
@@ -65,31 +77,39 @@ const WaveformContainer: React.FC = () => {
     );
   }
 
-  // Advanced Mode (More compact)
   return (
-    <div className="flex flex-col p-3 pt-1 gap-1.5 bg-black flex-shrink-0">
+    <div className="flex flex-col p-2 pt-0.5 gap-1 bg-black flex-shrink-0">
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em]">
           <button 
             onClick={() => setAdvancedEcgMode('Single')}
             className={cn("transition-colors", advancedEcgMode === 'Single' ? "text-white border-b border-white pb-0.5" : "text-slate-500")}
           >
-            Single lead
+            SINGLE LEAD
           </button>
           <button 
             onClick={() => setAdvancedEcgMode('All')}
             className={cn("transition-colors", advancedEcgMode === 'All' ? "text-white border-b border-white pb-0.5" : "text-slate-500")}
           >
-            All leads
+            ALL LEADS
           </button>
         </div>
         {advancedEcgMode === 'Single' && (
-          <CustomDropdown 
-            options={leads} 
-            current={selectedLeadIndex} 
-            onSelect={setSelectedLeadIndex}
-            align="right"
-          />
+          <div className="relative group ml-auto">
+            <select
+              value={selectedLeadIndex}
+              onChange={(e) => setSelectedLeadIndex(Number(e.target.value))}
+              className="absolute inset-0 opacity-0 cursor-pointer z-10"
+            >
+              {leads.map((lead, i) => (
+                <option key={lead} value={i} className="bg-slate-900 text-white">{lead}</option>
+              ))}
+            </select>
+            <span className="text-[10px] font-bold text-slate-300 group-hover:text-white transition-colors flex items-center gap-1 uppercase tracking-widest">
+              {leads[selectedLeadIndex]}
+              <ChevronDown size={12} className="opacity-40" />
+            </span>
+          </div>
         )}
       </div>
 
@@ -111,14 +131,23 @@ const WaveformContainer: React.FC = () => {
             </div>
           ))
         ) : (
-          <div className="relative bg-slate-950/60 rounded-lg border border-slate-800 h-32">
+          <div className={cn(
+            "relative bg-slate-950/60 rounded-lg border border-slate-800 transition-all duration-300",
+            isEcgExpanded ? "h-[300px]" : "h-24"
+          )}>
             <div className="absolute left-2 top-2 z-10 flex items-center gap-2">
               <span className="text-[10px] font-bold text-slate-300 uppercase">{leads[selectedLeadIndex]}</span>
               <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tighter">Status: Optimal</span>
             </div>
+            <button 
+              onClick={() => setIsEcgExpanded(!isEcgExpanded)}
+              className="absolute right-2 top-2 z-10 text-[9px] font-medium text-slate-500 uppercase tracking-widest hover:text-white transition-colors"
+            >
+              {isEcgExpanded ? '< COLLAPSE' : 'EXPAND >'}
+            </button>
             <WaveformCanvas 
               data={waveforms[selectedLeadIndex % 4]} 
-              height={128} 
+              height={isEcgExpanded ? 300 : 96} 
               color="#2dd4bf" 
               min={-1.5} 
               max={1.5} 
@@ -132,7 +161,7 @@ const WaveformContainer: React.FC = () => {
       {/* Respiration - Much Narrower */}
       <div className="flex flex-col mt-0.5">
         <div className="flex items-center justify-between px-1 mb-0.5">
-          <h4 className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">Resp Tracking</h4>
+          <h4 className="text-[8px] font-medium text-white uppercase tracking-widest">Resp Tracking</h4>
           <span className="text-[10px] font-bold text-teal-400 tabular-nums">{vitals.respirationRate.value}{vitals.respirationRate.unit}</span>
         </div>
         <div className="bg-slate-950/40 rounded border border-white/5 h-8">
@@ -151,7 +180,7 @@ const WaveformContainer: React.FC = () => {
       {/* SpO2 Graph - Refined */}
       <div className="flex flex-col mt-0.5">
         <div className="flex items-center justify-between px-1 mb-0.5">
-          <h4 className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">SpO2 Tracking</h4>
+          <h4 className="text-[8px] font-medium text-white uppercase tracking-widest">SpO2 Tracking</h4>
           <span className="text-[10px] font-bold text-teal-400 tabular-nums">{vitals.spo2.value}{vitals.spo2.unit}</span>
         </div>
         <div className="flex items-end gap-[0.5px] h-10 px-1 pb-1 overflow-hidden bg-slate-950/40 rounded border border-white/5">
@@ -166,20 +195,37 @@ const WaveformContainer: React.FC = () => {
       </div>
 
       {/* Auscultation Section */}
-      <div className="flex flex-col mt-2">
-        <div className="flex items-center justify-between px-1 mb-1">
-          <h4 className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Auscultation</h4>
-          <button className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 border border-slate-800 rounded-full text-[8px] font-bold text-slate-400 uppercase tracking-widest hover:text-white hover:border-teal-500/50 transition-all">
-            <div className="w-1.5 h-1.5 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
-            Start listening
+      <div className="flex flex-col mt-1">
+        <div className="flex items-center justify-between px-1 mb-0.5">
+          <h4 className="text-[8px] font-medium text-white uppercase tracking-widest">Auscultation</h4>
+          <button 
+            onClick={() => setIsListening(!isListening)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest transition-all border",
+              isListening 
+                ? "bg-rose-500/10 border-rose-500/50 text-rose-400" 
+                : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-teal-500/50"
+            )}
+          >
+            {isListening ? (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.5)]" />
+                Listening
+              </>
+            ) : (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
+                Start listening
+              </>
+            )}
           </button>
         </div>
       </div>
 
       {/* Alerts Section moved from Controls */}
-      <div className="flex flex-col mt-3 px-1">
-        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-2">Recent Alerts</span>
-        <div className="flex flex-col gap-2">
+      <div className="flex flex-col mt-1 px-1">
+        <span className="text-[9px] font-medium text-white uppercase tracking-[0.2em] mb-1">Recent Alerts</span>
+        <div className="flex flex-col gap-1">
           <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded border border-white/5">
             <div className="flex flex-col">
               <span className="text-[10px] font-medium text-slate-200">Elevated Heart Rate</span>

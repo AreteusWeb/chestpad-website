@@ -21,8 +21,8 @@ const AdvancedControls: React.FC = () => {
   const isInPast = historyOffset > 0;
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3 bg-black">
-      <div className="flex flex-col gap-2 mt-1">
+    <div className="flex flex-col gap-1.5 px-3 py-1.5 bg-black">
+      <div className="flex flex-col gap-1 mt-0.5">
         <div className="flex items-center justify-between gap-2">
           {/* Left Column: Navigation & Past Status */}
           <div className="flex flex-col items-center gap-1.5 min-w-[75px]">
@@ -114,7 +114,7 @@ const AdvancedControls: React.FC = () => {
         </div>
 
         {/* Timeline Slider (Restored) */}
-        <div className="px-2 py-1">
+        <div className="px-2 py-0">
           <input
             type="range"
             min="0"
@@ -128,7 +128,7 @@ const AdvancedControls: React.FC = () => {
       </div>
 
       {/* Footer Timestamp */}
-      <div className="flex justify-center mt-2">
+      <div className="flex justify-center mt-0.5">
         <span className="text-base font-bold text-slate-500 tabular-nums tracking-wider bg-black px-4">
           04/23 <span className="mx-2 opacity-50">|</span> {isInPast ? `T-${historyOffset}s` : '10:32'}
         </span>

@@ -26,7 +26,7 @@ export default function App() {
       <div className="max-w-md mx-auto relative flex flex-col min-h-screen border-x border-slate-900 shadow-2xl bg-black">
         <Header />
         
-        <main className="flex-1 flex flex-col pb-32">
+        <main className="flex-1 flex flex-col pb-6">
           {viewMode === 'Normal' ? (
             <div className="flex flex-col animate-in fade-in duration-500">
               <VitalsDisplay />
@@ -46,7 +46,7 @@ export default function App() {
         </main>
 
         <AnimatePresence>
-          {viewMode === 'Normal' ? <BottomNav key="bottom-nav" /> : <SideMenu key="side-menu" />}
+          <SideMenu key="side-menu" />
         </AnimatePresence>
 
         <Footer />
