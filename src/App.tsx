@@ -26,17 +26,16 @@ export default function App() {
       <div className="max-w-md mx-auto relative flex flex-col min-h-screen border-x border-slate-900 shadow-2xl bg-black">
         <Header />
         
-        <main className="flex-1 flex flex-col pb-6">
+        <main className="flex-1 flex flex-col pb-2">
           {viewMode === 'Normal' ? (
-            <div className="flex flex-col animate-in fade-in duration-500">
+            <div className="flex flex-col animate-in fade-in duration-500 flex-1">
               <VitalsDisplay />
-              <FallAlert />
               <ActivityStats />
               <AlertsPanel />
               <WaveformContainer />
             </div>
           ) : (
-            <div className="flex flex-col animate-in fade-in duration-500">
+            <div className="flex flex-col animate-in fade-in duration-500 flex-1">
               <VitalsDisplay compact />
               <FallAlert />
               <AdvancedControls />

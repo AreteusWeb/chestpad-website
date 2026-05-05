@@ -26,7 +26,7 @@ const useStore = create<AppState & AppActions>((set) => ({
   ],
   batteryLevel: 80,
   connectionStatus: 'Stable',
-  userName: 'Chris',
+  userName: 'User',
   deviceName: 'ChestPad v2',
   selectedLeadIndex: 0,
   isEcgExpanded: false,

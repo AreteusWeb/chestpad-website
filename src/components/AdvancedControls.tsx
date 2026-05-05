@@ -56,7 +56,7 @@ const AdvancedControls: React.FC = () => {
                   key={range}
                   onClick={() => setActiveRange(range)}
                   className={cn(
-                    "flex-1 px-1 py-2 rounded-full text-[8px] font-bold uppercase transition-all border border-slate-800 min-w-[30px]",
+                    "flex-1 px-1 py-2 rounded-full text-[10px] font-bold uppercase transition-all border border-slate-800 min-w-[30px]",
                     activeRange === range ? "bg-teal-500 text-white border-teal-400 shadow-lg shadow-teal-500/20" : "text-slate-500 hover:text-slate-300"
                   )}
                 >
@@ -72,10 +72,10 @@ const AdvancedControls: React.FC = () => {
                 )}
                 onClick={() => setSelectedEvent(0)}
               >
-                All
+                All Events
               </button>
               <CustomDropdown 
-                options={['Evt', 'Fall', 'HR', 'SpO2']}
+                options={['Select', 'Fall', 'HR', 'SpO2']}
                 current={selectedEvent}
                 onSelect={setSelectedEvent}
                 className="flex-1"

@@ -78,7 +78,7 @@ const WaveformContainer: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col p-2 pt-0.5 gap-1 bg-black flex-shrink-0">
+    <div className="flex flex-col p-2 pt-0.5 gap-1 bg-black flex-1 justify-between">
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em]">
           <button 
@@ -133,7 +133,7 @@ const WaveformContainer: React.FC = () => {
         ) : (
           <div className={cn(
             "relative bg-slate-950/60 rounded-lg border border-slate-800 transition-all duration-300",
-            isEcgExpanded ? "h-[300px]" : "h-24"
+            isEcgExpanded ? "h-[300px]" : "h-36"
           )}>
             <div className="absolute left-2 top-2 z-10 flex items-center gap-2">
               <span className="text-[10px] font-bold text-slate-300 uppercase">{leads[selectedLeadIndex]}</span>
@@ -147,7 +147,7 @@ const WaveformContainer: React.FC = () => {
             </button>
             <WaveformCanvas 
               data={waveforms[selectedLeadIndex % 4]} 
-              height={isEcgExpanded ? 300 : 96} 
+              height={isEcgExpanded ? 300 : 144} 
               color="#2dd4bf" 
               min={-1.5} 
               max={1.5} 

@@ -20,7 +20,7 @@ const AlertsPanel: React.FC = () => {
             <span className="text-[9px] font-medium text-slate-500 tabular-nums">{alert.timestamp}</span>
             <span className={cn(
               "text-[10px] font-medium truncate",
-              alert.severity === 'high' ? "text-rose-400" : "text-yellow-500"
+              alert.severity === 'high' ? "text-white" : "text-slate-400"
             )}>
               {alert.message}
             </span>
