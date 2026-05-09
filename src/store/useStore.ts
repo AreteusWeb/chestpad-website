@@ -40,11 +40,11 @@ const useStore = create<AppState & AppActions & EventState & EventActions>((set,
   viewMode: 'Normal',
   simulationMode: 'normal',
   vitals: {
-    heartRate:       { value: 72,        unit: 'BPM', trend: 'stable', severity: 'normal' },
-    spo2:            { value: 98,        unit: '%',   trend: 'stable', severity: 'normal' },
-    temperature:     { value: 36.5,      unit: '°C',  trend: 'stable', severity: 'normal' },
-    respirationRate: { value: 14,                     trend: 'stable', severity: 'normal' },
-    bloodPressure:   { value: '118/75',               trend: 'stable', severity: 'normal' },
+    heartRate: { value: 72, unit: 'BPM', trend: 'stable', severity: 'normal' },
+    spo2: { value: 98, unit: '%', trend: 'stable', severity: 'normal' },
+    temperature: { value: 36.5, unit: '°C', trend: 'stable', severity: 'normal' },
+    respirationRate: { value: 14, trend: 'stable', severity: 'normal' },
+    bloodPressure: { value: '118/75', trend: 'stable', severity: 'normal' },
   },
   activity: {
     steps: 0,
@@ -64,18 +64,18 @@ const useStore = create<AppState & AppActions & EventState & EventActions>((set,
   isAdvancedMenuOpen: false,
 
   // ── Acciones base ──────────────────────────────────────────────────────────
-  setConnected:        (connected) => set({ isConnected: connected }),
-  setIsLive:           (isLive)    => set({ isLive, ...(isLive ? { historyOffset: 0 } : {}) }),
-  setHistoryOffset:    (offset)    => set({ historyOffset: offset, isLive: offset === 0 }),
-  setViewMode:         (mode)      => set({ viewMode: mode }),
-  setSimulationMode:   (mode)      => set({ simulationMode: mode }),
-  setBatteryLevel:     (level)     => set({ batteryLevel: level }),
-  setConnectionStatus: (status)    => set({ connectionStatus: status }),
-  setSelectedLeadIndex:(index)     => set({ selectedLeadIndex: index }),
-  setIsEcgExpanded:    (expanded)  => set({ isEcgExpanded: expanded }),
-  setAdvancedEcgMode:  (mode)      => set({ advancedEcgMode: mode }),
-  setIsAdvancedMenuOpen:(isOpen)   => set({ isAdvancedMenuOpen: isOpen }),
-  setActivityType:     (type)      => set((state) => ({ activity: { ...state.activity, activityType: type } })),
+  setConnected: (connected) => set({ isConnected: connected }),
+  setIsLive: (isLive) => set({ isLive, ...(isLive ? { historyOffset: 0 } : {}) }),
+  setHistoryOffset: (offset) => set({ historyOffset: offset, isLive: offset === 0 }),
+  setViewMode: (mode) => set({ viewMode: mode }),
+  setSimulationMode: (mode) => set({ simulationMode: mode }),
+  setBatteryLevel: (level) => set({ batteryLevel: level }),
+  setConnectionStatus: (status) => set({ connectionStatus: status }),
+  setSelectedLeadIndex: (index) => set({ selectedLeadIndex: index }),
+  setIsEcgExpanded: (expanded) => set({ isEcgExpanded: expanded }),
+  setAdvancedEcgMode: (mode) => set({ advancedEcgMode: mode }),
+  setIsAdvancedMenuOpen: (isOpen) => set({ isAdvancedMenuOpen: isOpen }),
+  setActivityType: (type) => set((state) => ({ activity: { ...state.activity, activityType: type } })),
 
   updateVitals: (newVitals) => set((state) => {
     const updatedVitals = { ...state.vitals };
@@ -122,7 +122,10 @@ const useStore = create<AppState & AppActions & EventState & EventActions>((set,
   // Salta el slider al momento exacto del evento
   jumpToEvent: (event) => {
     const nowMs = Date.now();
-    const offsetSeconds = Math.round((nowMs - event.timestampEpoch) / 1000);
+    let offsetSeconds = Math.round((nowMs - event.timestampEpoch) / 1000);
+    // Mínimo 5s de offset para que el buffer tenga datos del momento del evento
+    // y los waveforms muestren la señal de ese instante, no el borde del buffer
+    offsetSeconds = Math.max(5, offsetSeconds);
     set({ historyOffset: offsetSeconds, isLive: false });
   },
 

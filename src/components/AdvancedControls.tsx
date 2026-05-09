@@ -118,9 +118,9 @@ const AdvancedControls: React.FC = () => {
           {/* Izquierda: «← + Past Status */}
           <div className="flex flex-col items-center gap-1.5 min-w-[75px]">
             <div className="flex gap-1">
-              <button onClick={() => navigateEvent('prev')} title="Evento anterior"
+              <button onClick={() => handleSeek('back', 60)} title="1 Min atrás"
                 className="p-2.5 px-3 rounded-full border border-slate-800/80 hover:bg-slate-800/50 transition-colors">
-                <ChevronsLeft size={16} className={filteredEvents.length > 0 ? "text-teal-400" : "text-slate-600"} />
+                <ChevronsLeft size={16} className="text-slate-400" />
               </button>
               <button onClick={() => handleSeek('back', 10)} title="10s atrás"
                 className="p-2.5 px-3 rounded-full border border-slate-800/80 hover:bg-slate-800/50 transition-colors">
@@ -156,76 +156,95 @@ const AdvancedControls: React.FC = () => {
               ))}
             </div>
 
-            {/* Dropdown de eventos — estilo igual que el de leads */}
-            <div className="relative z-50" ref={dropdownRef}>
+            {/* Event selection pills */}
+            <div className="flex items-center gap-1.5 justify-center w-full mt-1">
+              {/* All Events Pill */}
               <button
                 type="button"
-                onClick={() => setDropdownOpen(o => !o)}
-                className="w-full flex items-center justify-between gap-1.5 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 uppercase tracking-widest hover:border-teal-500/50 hover:bg-slate-800/80 transition-all shadow-lg active:scale-95"
+                onClick={() => setFilterIndex(0)}
+                className={cn(
+                  "flex-1 px-2 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                  filterIndex === 0
+                    ? "bg-teal-500 text-white border-teal-400 shadow-lg shadow-teal-500/20"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+                )}
               >
-                <span className="truncate">
-                  {selectedLabel}
-                  {filterIndex > 0 && filteredEvents.length > 0 && (
-                    <span className="ml-1.5 text-teal-400 normal-case">({filteredEvents.length})</span>
-                  )}
-                </span>
-                <ChevronDown size={12} className={cn("text-slate-500 transition-transform duration-200 flex-shrink-0", dropdownOpen && "rotate-180")} />
+                All Events
               </button>
 
-              {dropdownOpen && (
-                <div className="absolute z-[100] bottom-full mb-1 left-1/2 -translate-x-1/2 min-w-[160px] bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                  <div className="max-h-[200px] overflow-y-auto">
+              {/* Select Events Dropdown Pill */}
+              <div className="relative z-50 flex-1" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setDropdownOpen(o => !o)}
+                  className={cn(
+                    "w-full flex items-center justify-between gap-1 px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                    filterIndex !== 0
+                      ? "bg-teal-500 text-white border-teal-400 shadow-lg shadow-teal-500/20"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  <span className="truncate">
+                    {filterIndex === 0 ? 'Select Events' : selectedLabel}
+                  </span>
+                  <ChevronDown size={12} className={cn("transition-transform duration-200 flex-shrink-0 opacity-70", dropdownOpen && "rotate-180")} />
+                </button>
 
-                    {/* Opción "todos" */}
-                    <button
-                      type="button"
-                      onClick={() => { setFilterIndex(0); setDropdownOpen(false); }}
-                      className={cn(
-                        "w-full flex items-center justify-between px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-left transition-colors border-b border-white/5",
-                        filterIndex === 0
-                          ? "bg-teal-500 text-white"
-                          : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                {dropdownOpen && (
+                  <div className="absolute z-[100] bottom-full mb-1 left-1/2 -translate-x-1/2 min-w-[160px] bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    <div className="max-h-[200px] overflow-y-auto">
+
+                      {/* Opción "todos" */}
+                      <button
+                        type="button"
+                        onClick={() => { setFilterIndex(0); setDropdownOpen(false); }}
+                        className={cn(
+                          "w-full flex items-center justify-between px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-left transition-colors border-b border-white/5",
+                          filterIndex === 0
+                            ? "bg-teal-500 text-white"
+                            : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                        )}
+                      >
+                        <span>All Events {eventsInRange.length > 0 && `(${eventsInRange.length})`}</span>
+                        {filterIndex === 0 && <Check size={12} className="text-white" />}
+                      </button>
+
+                      {/* Tipos con eventos */}
+                      {dropdownOptions.length === 0 ? (
+                        <div className="px-4 py-3 text-[9px] text-slate-600 uppercase tracking-widest">
+                          No events yet
+                        </div>
+                      ) : (
+                        dropdownOptions.map(opt => (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            onClick={() => {
+                              setFilterIndex(opt.index);
+                              setDropdownOpen(false);
+                              // Saltar al evento más reciente de este tipo
+                              const types = EVENT_TYPE_MAP[opt.label] ?? [];
+                              const latest = eventsInRange.find(e => types.includes(e.type));
+                              if (latest) jumpToEvent(latest);
+                            }}
+                            className={cn(
+                              "w-full flex items-center justify-between px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-left transition-colors border-b border-white/5 last:border-0",
+                              filterIndex === opt.index
+                                ? "bg-teal-500 text-white"
+                                : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                            )}
+                          >
+                            <span>{opt.label}</span>
+                            <span className={cn("text-[8px]", filterIndex === opt.index ? "text-white/70" : "text-slate-600")}>
+                              {opt.count}
+                            </span>
+                          </button>
+                        ))
                       )}
-                    >
-                      <span>All Events {eventsInRange.length > 0 && `(${eventsInRange.length})`}</span>
-                      {filterIndex === 0 && <Check size={12} className="text-white" />}
-                    </button>
-
-                    {/* Tipos con eventos */}
-                    {dropdownOptions.length === 0 ? (
-                      <div className="px-4 py-3 text-[9px] text-slate-600 uppercase tracking-widest">
-                        No events yet
-                      </div>
-                    ) : (
-                      dropdownOptions.map(opt => (
-                        <button
-                          key={opt.label}
-                          type="button"
-                          onClick={() => {
-                            setFilterIndex(opt.index);
-                            setDropdownOpen(false);
-                            // Saltar al evento más reciente de este tipo
-                            const types = EVENT_TYPE_MAP[opt.label] ?? [];
-                            const latest = eventsInRange.find(e => types.includes(e.type));
-                            if (latest) jumpToEvent(latest);
-                          }}
-                          className={cn(
-                            "w-full flex items-center justify-between px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-left transition-colors border-b border-white/5 last:border-0",
-                            filterIndex === opt.index
-                              ? "bg-teal-500 text-white"
-                              : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                          )}
-                        >
-                          <span>{opt.label}</span>
-                          <span className={cn("text-[8px]", filterIndex === opt.index ? "text-white/70" : "text-slate-600")}>
-                            {opt.count}
-                          </span>
-                        </button>
-                      ))
-                    )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
@@ -236,9 +255,9 @@ const AdvancedControls: React.FC = () => {
                 className="p-2.5 px-3 rounded-full border border-slate-800/80 hover:bg-slate-800/50 transition-colors">
                 <ChevronRight size={16} className="text-slate-400" />
               </button>
-              <button onClick={() => navigateEvent('next')} title="Evento siguiente"
+              <button onClick={() => handleSeek('forward', 60)} title="1 Min adelante"
                 className="p-2.5 px-3 rounded-full border border-slate-800/80 hover:bg-slate-800/50 transition-colors">
-                <ChevronsRight size={16} className={filteredEvents.length > 0 ? "text-teal-400" : "text-slate-600"} />
+                <ChevronsRight size={16} className="text-slate-400" />
               </button>
             </div>
             <button onClick={() => setHistoryOffset(0)}
