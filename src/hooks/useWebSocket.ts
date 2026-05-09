@@ -22,19 +22,22 @@ const BUFFER_SIZE = 900_000;
 
 // Samples visibles por canal
 // ECG @ 250Hz → 750 = 3s | Resp/PPG decimado 1:5 → 150 = 3s de onda lenta
-const VIEW_SIZES = [750, 750, 750, 750, 150, 150, 50, 300];
-const DECIMATE   = [1,   1,   1,   1,   5,   5,   1,  1  ];
+const VIEW_SIZES = [750, 750, 750, 750, 750, 750, 750, 750, 150, 150, 50];
+const DECIMATE   = [1,   1,   1,   1,   1,   1,   1,   1,   5,   5,   1 ];
 
 // Rangos min/max por canal para WaveformCanvas
 export const CH_RANGES: [number, number][] = [
-  [-2_500_000, 2_500_000],  // ch0-3 ECG (int32)
+  [-2_500_000, 2_500_000],  // ch0-7 ECG (int32)
   [-2_500_000, 2_500_000],
   [-2_500_000, 2_500_000],
   [-2_500_000, 2_500_000],
-  [-8_388_607, 8_388_607],  // ch4 Pneumography
-  [0,          8_388_607],  // ch5 PPG
-  [3_400_000,  4_200_000],  // ch6 Temp (34-42C x 100k)
-  [-32_767,    32_767   ],  // ch7 Audio int16
+  [-2_500_000, 2_500_000],
+  [-2_500_000, 2_500_000],
+  [-2_500_000, 2_500_000],
+  [-2_500_000, 2_500_000],
+  [-8_388_607, 8_388_607],  // ch8 Pneumography
+  [0,          8_388_607],  // ch9 PPG
+  [3_400_000,  4_200_000],  // ch10 Temp (34-42C x 100k)
 ];
 
 // ─── Ring buffer con Float32Array ─────────────────────────────────────────────
@@ -232,17 +235,20 @@ function buildSimPacket(t: number, baseMode: SimMode): {
   updateSimState(currentMode);
   const hr = simState.hr, resp = simState.resp, temp = simState.temp;
   const dt = 1 / 250;
-  const channels: number[][] = Array.from({ length: 8 }, () => []);
+  const channels: number[][] = Array.from({ length: 11 }, () => []);
   for (let s = 0; s < 25; s++) {
     const ts = t + s * dt;
     channels[0].push(simEcg(ts, hr));
     channels[1].push(Math.round(simEcg(ts, hr) * 0.85));
     channels[2].push(Math.round(simEcg(ts, hr) * 0.65));
     channels[3].push(Math.round(simEcg(ts, hr) * -0.5));
-    channels[4].push(simResp(ts, resp));
-    channels[5].push(simPpg(ts, hr));
-    channels[6].push(Math.round(temp * 100_000 + gaussian(200)));
-    channels[7].push(Math.round(Math.sin(ts * 2 * Math.PI * 80) * 20_000 * Math.random()));
+    channels[4].push(Math.round(simEcg(ts, hr) * 0.4));
+    channels[5].push(Math.round(simEcg(ts, hr) * 0.3));
+    channels[6].push(Math.round(simEcg(ts, hr) * 0.2));
+    channels[7].push(Math.round(simEcg(ts, hr) * 0.1));
+    channels[8].push(simResp(ts, resp));
+    channels[9].push(simPpg(ts, hr));
+    channels[10].push(Math.round(temp * 100_000 + gaussian(200)));
   }
   return { timestamp: Math.round(t * 1000), channels, newEvent };
 }
@@ -265,7 +271,7 @@ export const useWebSocket = () => {
     VIEW_SIZES.map(n => new Array(n).fill(0))
   );
 
-  const rings   = useRef<RingBuffer[]>(Array.from({ length: 8 }, () => new RingBuffer(BUFFER_SIZE)));
+  const rings   = useRef<RingBuffer[]>(Array.from({ length: 11 }, () => new RingBuffer(BUFFER_SIZE)));
   const wsRef   = useRef<WebSocket | null>(null);
   const simRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const simTime = useRef(0);
@@ -273,7 +279,7 @@ export const useWebSocket = () => {
   // ── Procesar paquete ────────────────────────────────────────────────────────
   const handlePacket = useCallback((packet: { timestamp: number; channels: number[][] }) => {
     packet.channels.forEach((ch, i) => {
-      if (i >= 8) return;
+      if (i >= 11) return;
       const samples = Array.isArray(ch) ? ch : [ch];
       const ring = rings.current[i];
       for (const v of samples) ring.push(v);
@@ -339,9 +345,9 @@ export const useWebSocket = () => {
       if (offsetSamples > 0) return; // ← vitales congelados, solo actualizar waveforms
 
       const ecg  = rings.current[0].slice(750);
-      const ppg  = rings.current[5].slice(250);
-      const resp = rings.current[4].slice(1500);
-      const temp = rings.current[6].slice(25);
+      const ppg  = rings.current[9].slice(250);
+      const resp = rings.current[8].slice(1500);
+      const temp = rings.current[10].slice(25);
 
       const hr   = estimateHR(ecg);
       const spo2 = estimateSpO2(ppg);
@@ -404,7 +410,6 @@ export const useWebSocket = () => {
     const connect = () => {
       setConnectionStatus('Connecting');
       const ws = new WebSocket(WS_URL);
-      ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -415,16 +420,12 @@ export const useWebSocket = () => {
       };
 
       ws.onmessage = ({ data }) => {
-        if (data instanceof ArrayBuffer) {
-          // Binary: audio ch7 @ 8kHz, int16 LE, 800 samples = 1600 bytes
-          const view = new DataView(data);
-          const ring = rings.current[7];
-          for (let i = 0; i < data.byteLength / 2; i++) ring.push(view.getInt16(i * 2, true));
-        } else {
-          try {
-            const msg = JSON.parse(data as string);
-            if (msg.channels) handlePacket(msg);
-          } catch { /* auth_ok, mode_changed, etc */ }
+        // Expect only JSON packets now
+        try {
+          const msg = JSON.parse(data as string);
+          if (msg.channels) handlePacket(msg);
+        } catch {
+          // ignore non-JSON messages (e.g., auth responses)
         }
       };
 

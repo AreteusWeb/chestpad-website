@@ -6,7 +6,7 @@ import useStore from '../store/useStore';
 const MAX_HISTORY_SECONDS = 3600;
 
 const RANGE_SECONDS: Record<string, number> = {
-  '10 Min': 600,
+  '1 Min': 60,
   '1 Hr':   3600,
   '1 Day':  86400,
 };
@@ -26,7 +26,7 @@ const AdvancedControls: React.FC = () => {
   const getEventsInRange = useStore(s => s.getEventsInRange);
   const jumpToEvent      = useStore(s => s.jumpToEvent);
 
-  const ranges = ['10 Min', '1 Hr', '1 Day'];
+  const ranges = ['1 Min', '1 Hr', '1 Day'];
   const [activeRange, setActiveRange] = React.useState<string | null>(null);
   const [filterIndex, setFilterIndex] = React.useState(0); // 0 = "Select Events" placeholder
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
@@ -250,6 +250,27 @@ const AdvancedControls: React.FC = () => {
               )}>
               ● Live
             </button>
+          </div>
+        </div>
+
+        {/* Alerts Section */}
+        <div className="flex flex-col mt-2 px-1">
+          <span className="text-[9px] font-medium text-slate-400 uppercase tracking-[0.2em] mb-1">Recent Alerts</span>
+          <div className="flex flex-col gap-1">
+            <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded border border-white/5">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-medium text-white">Elevated Heart Rate</span>
+                <span className="text-[8px] text-slate-500 font-bold uppercase">10:11 AM</span>
+              </div>
+              <div className="text-[10px] font-medium text-slate-500">142 BPM</div>
+            </div>
+            <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded border border-white/5">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-medium text-white">SpO2 Threshold Drop</span>
+                <span className="text-[8px] text-slate-500 font-bold uppercase">10:35 AM</span>
+              </div>
+              <div className="text-[10px] font-medium text-slate-500">89%</div>
+            </div>
           </div>
         </div>
 

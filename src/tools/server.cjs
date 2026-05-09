@@ -46,44 +46,23 @@ function respSample(t, resp) {
   return Math.round(v * 8_388_607);
 }
 
-// Audio PCM a 8kHz (int16 little-endian) para ch7 auscultation
-function buildBinaryPacket(t0, hr) {
-  const SAMPLES = 800;
-  const buf  = Buffer.alloc(SAMPLES * 2); // 1600 bytes
-  const dt   = 1 / 8000;
-  const period = 60 / hr;
 
-  for (let i = 0; i < SAMPLES; i++) {
-    const t     = t0 + i * dt;
-    const phase = (t % period) / period;
-    let v = 0;
-    if      (phase < 0.04) v =  Math.sin(phase / 0.04 * Math.PI) * 3000;
-    else if (phase < 0.10) v =  Math.sin((phase - 0.04) / 0.06 * Math.PI) * -800;
-    else if (phase < 0.18) v =  Math.sin((phase - 0.10) / 0.08 * Math.PI) *  28000;
-    else if (phase < 0.22) v =  Math.sin((phase - 0.18) / 0.04 * Math.PI) * -5000;
-    else if (phase < 0.30) v =  Math.sin((phase - 0.22) / 0.08 * Math.PI) *  1500;
-    v += (Math.random() - 0.5) * 200;
-    buf.writeInt16LE(Math.round(v), i * 2);
-  }
-  return buf;
-}
 
-// JSON 8x25 matrix para todos los canales @ 250 Hz
+// JSON 11x25 matrix para todos los canales @ 250 Hz
 function buildJSONPacket(timestamp, t0, cfg) {
   const SAMPLES = 25;
   const dt = 1 / 250;
   const channels = [];
 
-  for (let ch = 0; ch < 8; ch++) {
+  for (let ch = 0; ch < 11; ch++) {
     const row = [];
     for (let s = 0; s < SAMPLES; s++) {
       const t = t0 + s * dt;
       let v;
-      if      (ch <= 3) v = ecgSample(t, cfg.hr) * (1 - ch * 0.08); // Leads I-III, aVR
-      else if (ch === 4) v = respSample(t, cfg.resp);
-      else if (ch === 5) v = ppgSample(t, cfg.hr);
-      else if (ch === 6) v = Math.round((cfg.temp + (Math.random() - 0.5) * 0.01) * 100_000);
-      else               v = Math.round(Math.sin(t * 2 * Math.PI * 200) * 8_000_000 * (0.5 + Math.random() * 0.5));
+      if      (ch <= 7) v = ecgSample(t, cfg.hr) * (1 - ch * 0.08); // Leads I-III, V1-V5
+      else if (ch === 8) v = respSample(t, cfg.resp);
+      else if (ch === 9) v = ppgSample(t, cfg.hr);
+      else if (ch === 10) v = Math.round((cfg.temp + (Math.random() - 0.5) * 0.01) * 100_000);
       row.push(Math.round(v));
     }
     channels.push(row);
@@ -122,11 +101,7 @@ wss.on('connection', (ws, req) => {
           const cfg = MODES[simMode] || MODES.normal;
           const t0  = deviceTimestamp / 1000; // en segundos
 
-          // 1) Binary frame (audio @ 8kHz)
-          const binPacket = buildBinaryPacket(t0, cfg.hr);
-          ws.send(binPacket);
-
-          // 2) JSON frame (8 canales @ 250Hz)
+          // JSON frame (11 canales @ 250Hz)
           const jsonPacket = buildJSONPacket(deviceTimestamp, t0, cfg);
           ws.send(jsonPacket);
 
