@@ -155,12 +155,12 @@ const AdvancedControls: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex items-center gap-1.5 justify-center w-full mt-1">
+            <div className="flex items-center gap-0.5 justify-center w-full mt-1">
               <button
                 type="button"
                 onClick={() => setFilterIndex(0)}
                 className={cn(
-                  "flex-1 px-2 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                  "flex-1 px-1 py-1.5 rounded-full text-[8px] font-bold uppercase transition-all border whitespace-nowrap",
                   filterIndex === 0
                     ? "bg-teal-500 text-white border-teal-400 shadow-lg shadow-teal-500/20"
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -174,7 +174,7 @@ const AdvancedControls: React.FC = () => {
                   type="button"
                   onClick={() => setDropdownOpen(o => !o)}
                   className={cn(
-                    "w-full flex items-center justify-between gap-1 px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                    "w-full flex items-center justify-between gap-0.5 px-1.5 py-1.5 rounded-full text-[8px] font-bold uppercase transition-all border whitespace-nowrap",
                     filterIndex !== 0
                       ? "bg-teal-500 text-white border-teal-400 shadow-lg shadow-teal-500/20"
                       : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white"
