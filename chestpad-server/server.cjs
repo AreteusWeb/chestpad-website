@@ -78,6 +78,12 @@ wss.on('connection', (ws, req) => {
         console.log(`[DEBUG] device=${ws.deviceId} sent ${channels.length} channels (expected 8)`);
       }
       const sess = sessions.get(ws.deviceId);
+
+      if (!sess) {
+        console.warn(`[WARN] sesión no encontrada device=${ws.deviceId}`);
+        return;
+      }
+
       sess.packetCount++;
       sess.lastSeen = Date.now();
 
