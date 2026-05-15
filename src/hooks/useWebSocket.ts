@@ -471,7 +471,9 @@ export const useWebSocket = () => {
 
     return () => {
       clearTimeout(reconnect);
-      wsRef.current?.close();
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      }
       stopSim();
     };
   }, [handlePacket, setConnected, setConnectionStatus, simulationMode]);
