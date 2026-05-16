@@ -21,7 +21,7 @@ const webClients = new Set();
 // The React app sends this hardcoded MAC — use it to tell apart device vs browser
 // Hardcoded para pruebas. Después cambiar a: if (msg.role === 'webclient')
 //const WEBCLIENT_MAC = 'A1:B2:C3:D4:E5:F6';
-const WEBCLIENT_MAC = '58:8C:81:56:41:78';
+const WEBCLIENT_MAC = 'WEB:CL:IE:NT:00:01';
 
 console.log(`\nChestPad WS Server running on port ${PORT}\n`);
 
