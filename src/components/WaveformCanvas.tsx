@@ -9,6 +9,7 @@ interface WaveformCanvasProps {
   max?: number;
   label?: string;
   gridLines?: boolean;
+  autoScale?: boolean; // nuevo prop — default true
 }
 
 const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
@@ -20,6 +21,7 @@ const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
   max = 1,
   label,
   gridLines = true,
+  autoScale = true, // autoscale activado por default
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -29,12 +31,11 @@ const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Handle high DPI and resizing
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     const displayWidth = Math.floor(rect.width);
     const displayHeight = Math.floor(height);
-    
+
     if (canvas.width !== displayWidth * dpr || canvas.height !== displayHeight * dpr) {
       canvas.width = displayWidth * dpr;
       canvas.height = displayHeight * dpr;
@@ -45,9 +46,8 @@ const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       ctx.clearRect(0, 0, displayWidth, displayHeight);
 
       if (gridLines) {
-        ctx.strokeStyle = '#1e293b'; // slate-800
+        ctx.strokeStyle = '#1e293b';
         ctx.lineWidth = 0.5;
-        // Horizontal grid
         for (let i = 0; i <= 4; i++) {
           const y = (i / 4) * displayHeight;
           ctx.beginPath();
@@ -55,7 +55,6 @@ const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
           ctx.lineTo(displayWidth, y);
           ctx.stroke();
         }
-        // Vertical grid
         for (let i = 0; i < displayWidth; i += 50) {
           ctx.beginPath();
           ctx.moveTo(i, 0);
@@ -66,21 +65,39 @@ const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
 
       if (data.length < 2) return;
 
+      // ── Autoscale: calcula min/max de los datos actuales ──────────────────
+      let effectiveMin = min;
+      let effectiveMax = max;
+
+      if (autoScale) {
+        let dataMin = Infinity;
+        let dataMax = -Infinity;
+        for (let i = 0; i < data.length; i++) {
+          if (data[i] < dataMin) dataMin = data[i];
+          if (data[i] > dataMax) dataMax = data[i];
+        }
+
+        // Si todos los valores son iguales (señal saturada), no dibujar
+        if (dataMin === dataMax) return;
+
+        // Agregar 5% de padding arriba y abajo para que no se corte la onda
+        const padding = (dataMax - dataMin) * 0.05;
+        effectiveMin = dataMin - padding;
+        effectiveMax = dataMax + padding;
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       ctx.beginPath();
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
-      // Advanced mode: scrolling effect
-      // We map the array to the width of the canvas
       const step = displayWidth / (data.length - 1);
-      
+
       for (let i = 0; i < data.length; i++) {
         const x = i * step;
-        // Normalize value to 0-1
-        const normalized = (data[i] - min) / (max - min);
-        // Map to canvas Y (inverted Y axis)
+        const normalized = (data[i] - effectiveMin) / (effectiveMax - effectiveMin);
         const y = displayHeight - normalized * displayHeight;
 
         if (i === 0) {
@@ -91,7 +108,6 @@ const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       }
       ctx.stroke();
 
-      // Label
       if (label) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.font = '10px Roboto Mono, monospace';
@@ -100,7 +116,7 @@ const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
     };
 
     draw();
-  }, [data, color, lineWidth, height, min, max, label, gridLines]);
+  }, [data, color, lineWidth, height, min, max, label, gridLines, autoScale]);
 
   return (
     <div className="relative w-full overflow-hidden" style={{ height }}>
