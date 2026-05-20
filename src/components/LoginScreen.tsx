@@ -133,7 +133,7 @@ export default function LoginScreen() {
                   placeholder="name@example.com"
                   required
                   disabled={loading}
-                  className="w-full bg-slate-950/50 border border-slate-800 text-slate-200 text-sm rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-all placeholder:text-slate-700 disabled:opacity-60"
+                  className="w-full bg-slate-950/50 border border-slate-800 text-slate-200 text-base rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-all placeholder:text-slate-700 disabled:opacity-60"
                 />
               </div>
             </div>
@@ -160,7 +160,7 @@ export default function LoginScreen() {
                   placeholder="••••••••"
                   required
                   disabled={loading}
-                  className="w-full bg-slate-950/50 border border-slate-800 text-slate-200 text-sm rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-all placeholder:text-slate-700 disabled:opacity-60"
+                  className="w-full bg-slate-950/50 border border-slate-800 text-slate-200 text-base rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-all placeholder:text-slate-700 disabled:opacity-60"
                 />
               </div>
             </div>
