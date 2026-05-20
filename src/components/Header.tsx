@@ -1,18 +1,36 @@
 import React from 'react';
-import { User, Smartphone, ChevronRight, MoreVertical } from 'lucide-react';
+import { MoreVertical } from 'lucide-react';
 import useStore from '../store/useStore';
 import { cn } from '../utils/cn';
 
 const Header: React.FC = () => {
-  const { userName, deviceName, isConnected, connectionStatus, viewMode, setViewMode, isAdvancedMenuOpen, setIsAdvancedMenuOpen } = useStore();
+  const {
+    currentUser,
+    isConnected,
+    connectionStatus,
+    viewMode,
+    setViewMode,
+    isAdvancedMenuOpen,
+    setIsAdvancedMenuOpen,
+  } = useStore();
+
+  // Prioridad: displayName del perfil Firebase → parte antes del @ en el email → "User"
+  const displayName =
+    currentUser?.displayName?.split(' ')[0]   // primer nombre
+    ?? currentUser?.email?.split('@')[0]       // fallback: parte del email
+    ?? 'User';
 
   return (
     <header className="flex justify-between items-center px-4 py-3 bg-transparent whitespace-nowrap relative z-50">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1 text-[10px] font-light text-slate-400 uppercase tracking-tighter">
-          <span>{userName} • </span>
+          <span>{displayName} • </span>
           <span className={cn(
-            !isConnected ? "text-rose-500" : (connectionStatus === 'Connecting' ? "text-yellow-500" : "text-emerald-500")
+            !isConnected
+              ? 'text-rose-500'
+              : connectionStatus === 'Connecting'
+                ? 'text-yellow-500'
+                : 'text-emerald-500'
           )}>
             Device {connectionStatus === 'Connecting' ? 'Connecting...' : (isConnected ? 'Connected' : 'Disconnected')}
           </span>
@@ -24,24 +42,24 @@ const Header: React.FC = () => {
           <button
             onClick={() => setViewMode('Advanced')}
             className={cn(
-              "px-3 py-1.5 rounded-full text-[11px] font-medium uppercase tracking-tight transition-all",
-            viewMode === 'Advanced' ? "bg-slate-700 text-white shadow-sm" : "text-slate-500 hover:text-slate-300"
-          )}
-        >
-          Advanced
-        </button>
+              'px-3 py-1.5 rounded-full text-[11px] font-medium uppercase tracking-tight transition-all',
+              viewMode === 'Advanced' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'
+            )}
+          >
+            Advanced
+          </button>
           <button
             onClick={() => setViewMode('Normal')}
             className={cn(
-              "px-3 py-1.5 rounded-full text-[11px] font-medium uppercase tracking-tight transition-all",
-            viewMode === 'Normal' ? "bg-slate-700 text-white shadow-sm" : "text-slate-500 hover:text-slate-300"
-          )}
-        >
-          Normal
-        </button>
+              'px-3 py-1.5 rounded-full text-[11px] font-medium uppercase tracking-tight transition-all',
+              viewMode === 'Normal' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'
+            )}
+          >
+            Normal
+          </button>
         </div>
         {!isAdvancedMenuOpen && (
-          <button 
+          <button
             onClick={() => setIsAdvancedMenuOpen(true)}
             className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-800/60 text-slate-400 hover:bg-slate-700 hover:text-white transition-all shadow-lg border border-white/5"
           >

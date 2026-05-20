@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { AppState, AppActions, SimulationMode, Alert, Vitals } from '../types';
-
+import type { User as FirebaseUser } from 'firebase/auth';
 // ─── Tipo de Evento ───────────────────────────────────────────────────────────
 // Un Event es distinto a un Alert:
 //   Alert  = notificación en el panel (texto, hora) — cosas generales
@@ -45,7 +45,17 @@ interface EventActions {
   getEventsInRange: (rangeSeconds: number) => ChestEvent[];
 }
 
-const useStore = create<AppState & AppActions & EventState & EventActions>((set, get) => ({
+interface AuthState {
+  currentUser: FirebaseUser | null;
+  deviceMac:   string | null;
+}
+
+interface AuthActions {
+  setCurrentUser: (user: FirebaseUser | null) => void;
+  setDeviceMac:   (mac: string | null) => void;
+}
+
+const useStore = create<AppState & AppActions & EventState & EventActions & AuthState & AuthActions>((set, get) => ({
   // ── Estado base ────────────────────────────────────────────────────────────
   isConnected: false,
   isLive: true,
@@ -75,6 +85,8 @@ const useStore = create<AppState & AppActions & EventState & EventActions>((set,
   isEcgExpanded: false,
   advancedEcgMode: 'All',
   isAdvancedMenuOpen: false,
+  currentUser: null,
+  deviceMac:   null,
 
   // ── Acciones base ──────────────────────────────────────────────────────────
   setConnected: (connected) => set({ isConnected: connected }),
@@ -88,6 +100,8 @@ const useStore = create<AppState & AppActions & EventState & EventActions>((set,
   setIsEcgExpanded: (expanded) => set({ isEcgExpanded: expanded }),
   setAdvancedEcgMode: (mode) => set({ advancedEcgMode: mode }),
   setIsAdvancedMenuOpen: (isOpen) => set({ isAdvancedMenuOpen: isOpen }),
+  setCurrentUser: (user) => set({ currentUser: user }),
+  setDeviceMac:   (mac)  => set({ deviceMac: mac }),
   setActivityType: (type) => set((state) => ({ activity: { ...state.activity, activityType: type } })),
 
   updateVitals: (newVitals) => set((state) => {

@@ -32,8 +32,10 @@ const VALID_EVENT_TYPES = new Set<EventType>([
  */
 export function useFirestore() {
     const addEvent = useStore(s => s.addEvent);
+    const currentUser = useStore(s => s.currentUser);
 
     useEffect(() => {
+        if (!currentUser) return;
         const q = query(
             collection(db, 'events'),
             orderBy('timestamp', 'desc'),
@@ -60,5 +62,5 @@ export function useFirestore() {
         }, (err) => console.error('[useFirestore] events:', err));
 
         return () => unsub();
-    }, [addEvent]);
+    }, [addEvent, currentUser]);
 }

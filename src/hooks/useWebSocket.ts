@@ -10,13 +10,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import useStore from '../store/useStore';
 import type { EventType } from '../store/useStore';
+import { getAuth } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const WS_URL = 'wss://chestpad-ws-server-1048900719191.us-central1.run.app/ws';
-//const DEVICE_MAC = '58:8C:81:56:41:78';  change mac if you change the device
 // Hardcoded para pruebas. Después cambiar a mandar role: 'webclient' en el auth
-const DEVICE_MAC = 'WEB:CL:IE:NT:00:01';
+//const DEVICE_MAC = 'WEB:CL:IE:NT:00:01';
 
 // 1 hora @ 250Hz = 900,000 samples por canal
 // Float32Array (4 bytes/sample) → ~28MB total para 8 canales
@@ -248,6 +249,7 @@ export const useWebSocket = () => {
   const addEvent = useStore(s => s.addEvent);
   const isLive = useStore(s => s.isLive);
   const historyOffset = useStore(s => s.historyOffset);
+  const deviceMac = useStore(s => s.deviceMac);
 
   const [waveforms, setWaveforms] = useState<number[][]>(
     VIEW_SIZES.map(n => new Array(n).fill(0))
@@ -436,11 +438,29 @@ export const useWebSocket = () => {
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 
-      ws.onopen = () => {
+      ws.onopen = async () => {
         stopSim();
         setConnected(true);
         setConnectionStatus('Stable');
-        ws.send(JSON.stringify({ type: 'auth', mac: DEVICE_MAC }));
+
+        const user = await new Promise<import('firebase/auth').User | null>((resolve) => {
+          if (auth.currentUser) { resolve(auth.currentUser); return; }
+          const unsub = auth.onAuthStateChanged((u) => { unsub(); resolve(u); });
+        });
+
+        if (!user) {
+          console.warn('[WS] onopen: no authenticated user, closing');
+          ws.close();
+          return;
+        }
+
+        try {
+          const token = await user.getIdToken(true);
+          ws.send(JSON.stringify({ type: 'auth', token, deviceMac: deviceMac ?? '' }));
+        } catch (err) {
+          console.error('[WS] Failed to get ID token:', err);
+          ws.close();
+        }
       };
 
       ws.onmessage = ({ data }) => {

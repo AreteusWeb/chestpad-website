@@ -17,11 +17,19 @@ import Footer from './components/Footer';
 import useStore from './store/useStore';
 import { useFirestore } from './hooks/useFirestore';
 import { AnimatePresence } from 'motion/react';
+import { useAuth } from './hooks/useAuth';
+import LoginScreen from './components/LoginScreen';
 
 
 export default function App() {
   const viewMode = useStore(state => state.viewMode);
+  useAuth();   // monta el listener de Firebase Auth (una sola vez)
+  const currentUser = useStore(s => s.currentUser);
   useFirestore();
+
+  if (currentUser === null) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-black text-slate-100 font-sans selection:bg-teal-500/30 overflow-y-auto scrollbar-hide">
