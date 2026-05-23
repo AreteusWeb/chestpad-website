@@ -49,7 +49,7 @@ const SideMenu: React.FC = () => {
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
               className="fixed right-0 top-0 h-full w-64 z-[70] flex flex-col"
             >
-              <div className="flex flex-col h-full bg-neutral-900/95 backdrop-blur-2xl shadow-2xl">
+              <div className="flex flex-col h-full bg-neutral-950/95 backdrop-blur-2xl shadow-2xl">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 pt-6 pb-4 border-b border-white/5">

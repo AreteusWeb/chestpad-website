@@ -169,7 +169,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({ open, onClose }) => {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="fixed right-0 top-0 h-full w-72 z-[70] flex flex-col bg-neutral-900/95 backdrop-blur-2xl shadow-2xl"
+            className="fixed right-0 top-0 h-full w-72 z-[70] flex flex-col bg-neutral-950/95 backdrop-blur-2xl shadow-2xl"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-6 pb-4 border-b border-white/5">
