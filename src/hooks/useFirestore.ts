@@ -56,7 +56,7 @@ export function useFirestore() {
                     type: d.type as EventType,
                     label: d.label ?? d.type,
                     severity: d.severity ?? 'high',
-                    timestampEpoch: d.timestamp ?? Date.now(),
+                    timestampEpoch: d.timestamp?.toMillis?.() ?? d.timestamp ?? Date.now(),
                 });
             });
         }, (err) => console.error('[useFirestore] events:', err));
