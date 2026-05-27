@@ -44,7 +44,7 @@ export interface AppState {
   vitals: Vitals;
   activity: Activity;
   alerts: Alert[];
-  batteryLevel: number;
+  batteryLevel: number | null;
   connectionStatus: 'Stable' | 'Weak' | 'Disconnected' | 'Connecting';
   userName: string;
   deviceName: string;

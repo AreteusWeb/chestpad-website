@@ -44,15 +44,22 @@ const AdvancedControls: React.FC = () => {
 
   const isLive = historyOffset === 0;
 
+  const [now, setNow] = React.useState(Date.now());
+  React.useEffect(() => {
+    if (!isLive) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isLive]);
+
   const displayTime = React.useMemo(() => {
-    const target = new Date(Date.now() - historyOffset * 1000);
-    const mm = String(target.getMonth() + 1).padStart(2, '0');
-    const dd = String(target.getDate()).padStart(2, '0');
-    const hh = String(target.getHours()).padStart(2, '0');
+    const target = new Date(isLive ? now : Date.now() - historyOffset * 1000);
+    const mm  = String(target.getMonth() + 1).padStart(2, '0');
+    const dd  = String(target.getDate()).padStart(2, '0');
+    const hh  = String(target.getHours()).padStart(2, '0');
     const min = String(target.getMinutes()).padStart(2, '0');
-    const ss = String(target.getSeconds()).padStart(2, '0');
+    const ss  = String(target.getSeconds()).padStart(2, '0');
     return { date: `${mm}/${dd}`, time: `${hh}:${min}:${ss}` };
-  }, [historyOffset]);
+  }, [isLive, now, historyOffset]);
 
   const eventsInRange = React.useMemo(() => {
     const rangeS = activeRange ? RANGE_SECONDS[activeRange] : 3600;
@@ -91,7 +98,7 @@ const AdvancedControls: React.FC = () => {
       else setHistoryOffset(0);
     }
   };
-
+  
   const handleSeek = (direction: 'back' | 'forward', amount: number) => {
     const next = direction === 'back'
       ? Math.min(historyOffset + amount, MAX_HISTORY_SECONDS)

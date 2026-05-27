@@ -10,21 +10,16 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import useStore from '../store/useStore';
 import type { EventType } from '../store/useStore';
-import { getAuth } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const WS_URL = `wss://chestpad-ws-server-1048900719191.us-central1.run.app/ws`;
-// Hardcoded para pruebas. Después cambiar a mandar role: 'webclient' en el auth
-//const DEVICE_MAC = 'WEB:CL:IE:NT:00:01';
 
 // 1 hora @ 250Hz = 900,000 samples por canal
-// Float32Array (4 bytes/sample) → ~28MB total para 8 canales
 const BUFFER_SIZE = 900_000;
 
 // Samples visibles por canal
-// ECG @ 250Hz → 750 = 3s | Resp/PPG decimado 1:5 → 150 = 3s de onda lenta
 const VIEW_SIZES = [750, 750, 750, 750, 150, 150, 50, 300];
 const DECIMATE = [1, 1, 1, 1, 5, 5, 1, 1];
 
@@ -35,13 +30,12 @@ export const CH_RANGES: [number, number][] = [
   [-2_500_000, 2_500_000],
   [-2_500_000, 2_500_000],
   [-8_388_607, 8_388_607],  // ch4 Pneumography
-  [0, 8_388_607],  // ch5 PPG
-  [3_400_000, 4_200_000],  // ch6 Temp (34-42C x 100k)
-  [-32_767, 32_767],  // ch7 Audio int16
+  [0, 8_388_607],           // ch5 PPG
+  [3_400_000, 4_200_000],   // ch6 Temp (34-42C x 100k)
+  [-32_767, 32_767],        // ch7 Audio int16
 ];
 
 // ─── Ring buffer con Float32Array ─────────────────────────────────────────────
-// Pointer en lugar de splice -> cero GC, cero stutter con buffers grandes
 
 class RingBuffer {
   private buf: Float32Array;
@@ -58,7 +52,6 @@ class RingBuffer {
     if (this._size < this.capacity) this._size++;
   }
 
-  // Ultimos n samples en orden cronologico
   slice(n: number): Float32Array {
     const count = Math.min(n, this._size);
     const out = new Float32Array(count);
@@ -71,17 +64,12 @@ class RingBuffer {
 
   sliceAt(n: number, offsetSamples: number): Float32Array {
     if (this._size === 0) return new Float32Array(n);
-
-    // Clamp offset so we don't go beyond the available history
-    // This ensures we always return valid data (the oldest available) instead of zeros
     const maxOffset = Math.max(0, this._size - n);
     const clampedOffset = Math.min(offsetSamples, maxOffset);
-
     const count = Math.min(n, this._size);
     const out = new Float32Array(count);
     const endPtr = (this.ptr - clampedOffset + this.capacity) % this.capacity;
     const start = (endPtr - count + this.capacity) % this.capacity;
-
     for (let i = 0; i < count; i++) {
       out[i] = this.buf[(start + i) % this.capacity];
     }
@@ -161,7 +149,6 @@ type SimMode =
   | 'tachypnea' | 'bradypnea'
   | 'hypertension' | 'hypotension';
 
-// ── Eventos que el simulador dispara aleatoriamente ──────────────────────────
 const SIM_EVENTS: Array<{ mode: SimMode; type: EventType; label: string; severity: 'high' | 'medium' }> = [
   { mode: 'tachycardia', type: 'tachycardia', label: 'Elevated HR', severity: 'high' },
   { mode: 'bradycardia', type: 'bradycardia', label: 'Low HR', severity: 'high' },
@@ -175,16 +162,16 @@ const SIM_EVENTS: Array<{ mode: SimMode; type: EventType; label: string; severit
 ];
 
 const SIM_PARAMS: Record<SimMode, { hr: number; resp: number; temp: number; spo2: number; sys: number; dia: number }> = {
-  normal: { hr: 75, resp: 16, temp: 36.6, spo2: 98, sys: 118, dia: 75 },
-  tachycardia: { hr: 135, resp: 20, temp: 36.8, spo2: 96, sys: 132, dia: 84 },
-  bradycardia: { hr: 40, resp: 14, temp: 36.5, spo2: 97, sys: 105, dia: 65 },
-  spo2_drop: { hr: 82, resp: 24, temp: 36.6, spo2: 84, sys: 125, dia: 80 },
-  hyperthermia: { hr: 98, resp: 21, temp: 39.4, spo2: 97, sys: 128, dia: 82 },
-  hypothermia: { hr: 50, resp: 10, temp: 34.2, spo2: 95, sys: 100, dia: 62 },
-  tachypnea: { hr: 90, resp: 28, temp: 37.1, spo2: 94, sys: 120, dia: 78 },
-  bradypnea: { hr: 68, resp: 8, temp: 36.5, spo2: 96, sys: 115, dia: 74 },
-  hypertension: { hr: 88, resp: 18, temp: 36.8, spo2: 97, sys: 155, dia: 98 },
-  hypotension: { hr: 105, resp: 20, temp: 36.4, spo2: 96, sys: 82, dia: 52 },
+  normal:       { hr: 75,  resp: 16, temp: 36.6, spo2: 98, sys: 118, dia: 75 },
+  tachycardia:  { hr: 135, resp: 20, temp: 36.8, spo2: 96, sys: 132, dia: 84 },
+  bradycardia:  { hr: 40,  resp: 14, temp: 36.5, spo2: 97, sys: 105, dia: 65 },
+  spo2_drop:    { hr: 82,  resp: 24, temp: 36.6, spo2: 84, sys: 125, dia: 80 },
+  hyperthermia: { hr: 98,  resp: 21, temp: 39.4, spo2: 97, sys: 128, dia: 82 },
+  hypothermia:  { hr: 50,  resp: 10, temp: 34.2, spo2: 95, sys: 100, dia: 62 },
+  tachypnea:    { hr: 90,  resp: 28, temp: 37.1, spo2: 94, sys: 120, dia: 78 },
+  bradypnea:    { hr: 68,  resp: 8,  temp: 36.5, spo2: 96, sys: 115, dia: 74 },
+  hypertension: { hr: 88,  resp: 18, temp: 36.8, spo2: 97, sys: 155, dia: 98 },
+  hypotension:  { hr: 105, resp: 20, temp: 36.4, spo2: 96, sys: 82,  dia: 52 },
 };
 
 const simState = { hr: 75, resp: 16, temp: 36.6, spo2: 98, sys: 118, dia: 75 };
@@ -192,11 +179,11 @@ const simState = { hr: 75, resp: 16, temp: 36.6, spo2: 98, sys: 118, dia: 75 };
 function simEcg(t: number, hr: number): number {
   const phase = (t * hr / 60) % 1;
   let v = 0;
-  if (phase < 0.04) v = 0.15 * Math.sin(phase / 0.04 * Math.PI);
-  else if (phase < 0.10) v = -0.10 * Math.sin((phase - 0.04) / 0.06 * Math.PI);
-  else if (phase < 0.18) v = 0.85 * Math.sin((phase - 0.10) / 0.08 * Math.PI);
-  else if (phase < 0.22) v = -0.25 * Math.sin((phase - 0.18) / 0.04 * Math.PI);
-  else if (phase < 0.38) v = 0.12 * Math.sin((phase - 0.22) / 0.16 * Math.PI);
+  if (phase < 0.04)       v = 0.15 * Math.sin(phase / 0.04 * Math.PI);
+  else if (phase < 0.10)  v = -0.10 * Math.sin((phase - 0.04) / 0.06 * Math.PI);
+  else if (phase < 0.18)  v = 0.85 * Math.sin((phase - 0.10) / 0.08 * Math.PI);
+  else if (phase < 0.22)  v = -0.25 * Math.sin((phase - 0.18) / 0.04 * Math.PI);
+  else if (phase < 0.38)  v = 0.12 * Math.sin((phase - 0.22) / 0.16 * Math.PI);
   return Math.round((v + (Math.random() - 0.5) * 0.015) * 2_000_000);
 }
 
@@ -212,13 +199,13 @@ function simResp(t: number, resp: number): number {
 
 function buildSimPacket(t: number, mode: SimMode) {
   const p = SIM_PARAMS[mode];
-  simState.hr += (p.hr - simState.hr) * 0.02 + (Math.random() - 0.5) * 0.5;
+  simState.hr   += (p.hr   - simState.hr)   * 0.02 + (Math.random() - 0.5) * 0.5;
   simState.resp += (p.resp - simState.resp) * 0.02 + (Math.random() - 0.5) * 0.2;
   simState.temp += (p.temp - simState.temp) * 0.02 + (Math.random() - 0.5) * 0.02;
   simState.spo2 += (p.spo2 - simState.spo2) * 0.02 + (Math.random() - 0.5) * 0.2;
-  simState.sys += (p.sys - simState.sys) * 0.02 + (Math.random() - 0.5) * 0.5;
-  simState.dia += (p.dia - simState.dia) * 0.02 + (Math.random() - 0.5) * 0.5;
-  simState.spo2 = Math.min(100, Math.max(0, simState.spo2));
+  simState.sys  += (p.sys  - simState.sys)  * 0.02 + (Math.random() - 0.5) * 0.5;
+  simState.dia  += (p.dia  - simState.dia)  * 0.02 + (Math.random() - 0.5) * 0.5;
+  simState.spo2  = Math.min(100, Math.max(0, simState.spo2));
 
   const dt = 1 / 250;
   const channels: number[][] = Array.from({ length: 8 }, () => []);
@@ -241,24 +228,23 @@ function buildSimPacket(t: number, mode: SimMode) {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export const useWebSocket = () => {
-  const setConnected = useStore(s => s.setConnected);
+  const setConnected       = useStore(s => s.setConnected);
   const setConnectionStatus = useStore(s => s.setConnectionStatus);
-  const simulationMode = useStore(s => s.simulationMode);
-  const updateVitals = useStore(s => s.updateVitals);
-  const addAlert = useStore(s => s.addAlert);
-  const addEvent = useStore(s => s.addEvent);
-  const isLive = useStore(s => s.isLive);
-  const historyOffset = useStore(s => s.historyOffset);
-  const deviceMac = useStore(s => s.deviceMac);
+  const simulationMode     = useStore(s => s.simulationMode);
+  const updateVitals       = useStore(s => s.updateVitals);
+  const addAlert           = useStore(s => s.addAlert);
+  const addEvent           = useStore(s => s.addEvent);
+  const historyOffset      = useStore(s => s.historyOffset);
+  const deviceMac          = useStore(s => s.deviceMac);
 
   const [waveforms, setWaveforms] = useState<number[][]>(
     VIEW_SIZES.map(n => new Array(n).fill(0))
   );
 
-  const rings = useRef<RingBuffer[]>(Array.from({ length: 8 }, () => new RingBuffer(BUFFER_SIZE)));
-  const wsRef = useRef<WebSocket | null>(null);
-  const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const simTime = useRef(0);
+  const rings    = useRef<RingBuffer[]>(Array.from({ length: 8 }, () => new RingBuffer(BUFFER_SIZE)));
+  const wsRef    = useRef<WebSocket | null>(null);
+  const simRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const simTime  = useRef(0);
 
   // ── Procesar paquete ────────────────────────────────────────────────────────
   const handlePacket = useCallback((packet: { timestamp: number; channels: number[][] }) => {
@@ -270,8 +256,6 @@ export const useWebSocket = () => {
     });
   }, []);
 
-  // Ref para que el render loop siempre lea el historyOffset actual
-  // sin necesidad de recrear el loop cada vez que cambia
   const historyOffsetRef = useRef(historyOffset);
   useEffect(() => { historyOffsetRef.current = historyOffset; }, [historyOffset]);
 
@@ -295,7 +279,7 @@ export const useWebSocket = () => {
       if (now - last < 33) return;
       last = now;
 
-      const offsetSamples = historyOffsetRef.current * 250; // segundos -> samples @ 250Hz
+      const offsetSamples = historyOffsetRef.current * 250;
 
       // Waveforms
       const next = rings.current.map((ring, ch) => {
@@ -320,67 +304,88 @@ export const useWebSocket = () => {
 
       setWaveforms(next);
 
-      // Vitales cada ~1s (30 frames a 30fps)
+      // Vitales cada ~1s
       vitalTick++;
       if (vitalTick < 30) return;
       vitalTick = 0;
 
-      const ecg = offsetSamples === 0 ? rings.current[0].slice(750) : rings.current[0].sliceAt(750, offsetSamples);
-      const ppg = offsetSamples === 0 ? rings.current[5].slice(250) : rings.current[5].sliceAt(250, offsetSamples);
+      const ecg  = offsetSamples === 0 ? rings.current[0].slice(750)  : rings.current[0].sliceAt(750,  offsetSamples);
+      const ppg  = offsetSamples === 0 ? rings.current[5].slice(250)  : rings.current[5].sliceAt(250,  offsetSamples);
       const resp = offsetSamples === 0 ? rings.current[4].slice(1500) : rings.current[4].sliceAt(1500, offsetSamples);
-      const temp = offsetSamples === 0 ? rings.current[6].slice(25) : rings.current[6].sliceAt(25, offsetSamples);
-      const bp = offsetSamples === 0 ? rings.current[7].slice(25) : rings.current[7].sliceAt(25, offsetSamples);
+      const temp = offsetSamples === 0 ? rings.current[6].slice(25)   : rings.current[6].sliceAt(25,   offsetSamples);
+      const bp   = offsetSamples === 0 ? rings.current[7].slice(25)   : rings.current[7].sliceAt(25,   offsetSamples);
 
-      const hr = estimateHR(ecg);
-      const spo2 = estimateSpO2(ppg);
-      const rr = estimateResp(resp);
-      const tmp = extractTemp(temp);
+      const hr     = estimateHR(ecg);
+      const spo2   = estimateSpO2(ppg);
+      const rr     = estimateResp(resp);
+      const tmp    = extractTemp(temp);
       const bpData = extractBp(bp);
 
-      const hrTrend = getTrend(hr, prevVitals.current.hr, 1);
+      const hrTrend  = getTrend(hr,  prevVitals.current.hr,   1);
       const spo2Trend = getTrend(spo2, prevVitals.current.spo2, 0.5);
-      const rrTrend = getTrend(rr, prevVitals.current.resp, 1);
-      const tmpTrend = getTrend(tmp, prevVitals.current.temp, 0.2);
+      const rrTrend  = getTrend(rr,  prevVitals.current.resp,  1);
+      const tmpTrend = getTrend(tmp, prevVitals.current.temp,  0.2);
       const sysTrend = bpData ? getTrend(bpData.sys, prevVitals.current.sys, 2) : 'stable';
 
       prevVitals.current = { hr, spo2, resp: rr, temp: tmp, sys: bpData ? bpData.sys : prevVitals.current.sys };
 
-      if (hr > 0) updateVitals({
-        heartRate: {
-          value: hr,
-          trend: hrTrend,
-          severity: hr > 120 || hr < 45 ? 'critical' : hr > 100 || hr < 55 ? 'moderate' : 'normal',
+      if (hr > 0) {
+        updateVitals({
+          heartRate: {
+            value: hr,
+            trend: hrTrend,
+            severity: hr > 120 || hr < 45 ? 'critical' : hr > 100 || hr < 55 ? 'moderate' : 'normal',
+          }
+        });
+
+        // Primera vez que llegan datos reales — activa el display
+        if (!useStore.getState().hasRealData) {
+          useStore.getState().setHasRealData(true);
         }
-      });
+      }
 
       const updates: any = {
-        spo2: { value: spo2, trend: spo2Trend, severity: spo2 < 90 ? 'critical' : spo2 < 94 ? 'moderate' : 'normal' },
-        temperature: { value: tmp, trend: tmpTrend, severity: tmp > 39 ? 'critical' : tmp > 37.5 ? 'moderate' : 'normal' },
-        respirationRate: { value: rr > 0 ? rr : 16, trend: rrTrend, severity: rr > 25 || rr < 10 ? 'critical' : 'normal' },
+        spo2: {
+          value: spo2,
+          trend: spo2Trend,
+          severity: spo2 < 90 ? 'critical' : spo2 < 94 ? 'moderate' : 'normal',
+        },
+        temperature: {
+          value: tmp,
+          trend: tmpTrend,
+          severity: tmp > 39 ? 'critical' : tmp > 37.5 ? 'moderate' : 'normal',
+        },
+        respirationRate: {
+          value: rr > 0 ? rr : 16,
+          trend: rrTrend,
+          severity: rr > 25 || rr < 10 ? 'critical' : 'normal',
+        },
       };
 
       if (bpData) {
         updates.bloodPressure = {
           value: `${bpData.sys}/${bpData.dia}`,
           trend: sysTrend,
-          severity: (bpData.sys > 140 || bpData.dia > 90) ? 'critical' : (bpData.sys < 90 || bpData.dia < 60) ? 'critical' : 'normal'
+          severity: (bpData.sys > 140 || bpData.dia > 90) ? 'critical'
+                  : (bpData.sys < 90  || bpData.dia < 60) ? 'critical'
+                  : 'normal',
         };
       }
 
       updateVitals(updates);
 
-      // Solo alertas en modo Live — no spamear con datos historicos
-      if (historyOffset === 0) {
-        if (hr > 120) addAlert({ timestamp: new Date().toLocaleTimeString(), message: `Elevated HR: ${hr} BPM`, severity: 'high' });
+      // Solo alertas en modo Live
+      if (historyOffsetRef.current === 0) {
+        if (hr > 120)       addAlert({ timestamp: new Date().toLocaleTimeString(), message: `Elevated HR: ${hr} BPM`, severity: 'high' });
         if (hr > 0 && hr < 45) addAlert({ timestamp: new Date().toLocaleTimeString(), message: `Low HR: ${hr} BPM`, severity: 'high' });
-        if (spo2 < 90) addAlert({ timestamp: new Date().toLocaleTimeString(), message: `SpO2 Drop: ${spo2}%`, severity: 'high' });
-        if (tmp > 38.5) addAlert({ timestamp: new Date().toLocaleTimeString(), message: `Fever: ${tmp}C`, severity: 'medium' });
+        if (spo2 < 90)      addAlert({ timestamp: new Date().toLocaleTimeString(), message: `SpO2 Drop: ${spo2}%`, severity: 'high' });
+        if (tmp > 38.5)     addAlert({ timestamp: new Date().toLocaleTimeString(), message: `Fever: ${tmp}C`, severity: 'medium' });
       }
     };
 
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, [updateVitals, addAlert]); // historyOffset se lee via ref, no recrea el loop
+  }, [updateVitals, addAlert]);
 
   // ── WebSocket + fallback simulador ─────────────────────────────────────────
   useEffect(() => {
@@ -396,27 +401,25 @@ export const useWebSocket = () => {
       setConnected(true);
       setConnectionStatus('Stable');
 
-      // Estado del evento activo del simulador
       let activeEvent: typeof SIM_EVENTS[0] | null = null;
       let ticksLeft = 0;
-      let nextEventIn = 400 + Math.floor(Math.random() * 200); // primer evento ~40-60s
+      let nextEventIn = 400 + Math.floor(Math.random() * 200);
       let ticksSinceEvent = 0;
 
       simRef.current = setInterval(() => {
         simTime.current += 0.1;
         ticksSinceEvent++;
 
-        // Gestión de eventos simulados
         if (activeEvent && ticksLeft > 0) {
           ticksLeft--;
           if (ticksLeft === 0) {
             activeEvent = null;
-            nextEventIn = 800 + Math.floor(Math.random() * 800); // 80-160s entre eventos
+            nextEventIn = 800 + Math.floor(Math.random() * 800);
             ticksSinceEvent = 0;
           }
         } else if (!activeEvent && ticksSinceEvent >= nextEventIn) {
           activeEvent = SIM_EVENTS[Math.floor(Math.random() * SIM_EVENTS.length)];
-          ticksLeft = 300; // 30s de duración
+          ticksLeft = 300;
           ticksSinceEvent = 0;
           addEvent({
             type: activeEvent.type,
@@ -440,8 +443,7 @@ export const useWebSocket = () => {
 
       ws.onopen = async () => {
         stopSim();
-        setConnected(true);
-        setConnectionStatus('Stable');
+        setConnectionStatus('Connecting');
 
         const user = await new Promise<import('firebase/auth').User | null>((resolve) => {
           if (auth.currentUser) { resolve(auth.currentUser); return; }
@@ -465,7 +467,6 @@ export const useWebSocket = () => {
 
       ws.onmessage = ({ data }) => {
         if (data instanceof ArrayBuffer) {
-          // Binary: audio ch7 @ 8kHz, int16 LE, 800 samples = 1600 bytes
           const view = new DataView(data);
           const ring = rings.current[7];
           for (let i = 0; i < data.byteLength / 2; i++) ring.push(view.getInt16(i * 2, true));
@@ -473,7 +474,17 @@ export const useWebSocket = () => {
           try {
             const msg = JSON.parse(data as string);
             if (msg.channels) handlePacket(msg);
-          } catch { /* auth_ok, mode_changed, etc */ }
+
+            if (msg.type === 'auth_ok') {
+              setConnected(true);
+              setConnectionStatus('Stable');
+            }
+
+            if (msg.type === 'device_disconnected') {
+              setConnected(false);
+              setConnectionStatus('Disconnected');
+            }
+          } catch { /* ignorar mensajes no-JSON */ }
         }
       };
 

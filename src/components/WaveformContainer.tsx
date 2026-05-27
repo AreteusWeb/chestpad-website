@@ -44,10 +44,6 @@ const WaveformContainer: React.FC = () => {
                 <ChevronDown size={14} className="opacity-40" />
               </span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Good</span>
-            </div>
           </div>
           <button
             onClick={() => setIsEcgExpanded(!isEcgExpanded)}
@@ -135,7 +131,6 @@ const WaveformContainer: React.FC = () => {
           )}>
             <div className="absolute left-2 top-2 z-10 flex items-center gap-2">
               <span className="text-[10px] font-bold text-slate-300 uppercase">{leads[selectedLeadIndex]}</span>
-              <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-tighter">Status: Optimal</span>
             </div>
             <button
               onClick={() => setIsEcgExpanded(!isEcgExpanded)}
@@ -159,7 +154,6 @@ const WaveformContainer: React.FC = () => {
       <div className="flex flex-col mt-0.5">
         <div className="flex items-center justify-between px-1 mb-0.5">
           <h4 className="text-[8px] font-medium text-white uppercase tracking-widest">Resp Tracking</h4>
-          <span className="text-[10px] font-bold text-teal-400 tabular-nums">{vitals.respirationRate.value}{vitals.respirationRate.unit}</span>
         </div>
         <div className="bg-slate-950/40 rounded border border-white/5 h-8">
           <WaveformCanvas
@@ -177,7 +171,6 @@ const WaveformContainer: React.FC = () => {
       <div className="flex flex-col mt-0.5">
         <div className="flex items-center justify-between px-1 mb-0.5">
           <h4 className="text-[8px] font-medium text-white uppercase tracking-widest">SpO2 Tracking</h4>
-          <span className="text-[10px] font-bold text-teal-400 tabular-nums">{vitals.spo2.value}{vitals.spo2.unit}</span>
         </div>
         <div className="flex items-end gap-[0.5px] h-10 px-1 pb-1 overflow-hidden bg-slate-950/40 rounded border border-white/5">
           {waveforms[5].slice(-180).map((val, i) => (

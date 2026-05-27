@@ -11,17 +11,16 @@ const SeverityArrows: React.FC<{ trend: 'up' | 'down' | 'stable'; severity: Seve
   return null;
 };
 
-// ── Label de alerta — una línea, lenguaje plain ───────────────────────────────
 const getAlertLabel = (label: string, status: VitalStatus): string | null => {
   if (status.severity === 'normal') return null;
   const isHigh = status.trend === 'up';
   switch (label) {
-    case 'Temperature': return isHigh ? 'High Temp' : 'Low Temp';
-    case 'BPM': return isHigh ? 'Elevated HR' : 'Low HR';
-    case 'SpO2': return 'Low SpO2';
-    case 'Blood Pressure': return isHigh ? 'High BP' : 'Low BP';
+    case 'Temperature':      return isHigh ? 'High Temp' : 'Low Temp';
+    case 'BPM':              return isHigh ? 'Elevated HR' : 'Low HR';
+    case 'SpO2':             return 'Low SpO2';
+    case 'Blood Pressure':   return isHigh ? 'High BP' : 'Low BP';
     case 'Respiratory Rate': return isHigh ? 'High Resp Rate' : 'Low Resp Rate';
-    default: return 'Abnormal value';
+    default:                 return 'Abnormal value';
   }
 };
 
@@ -32,9 +31,11 @@ const VitalCard: React.FC<{
   size?: 'sm' | 'normal' | 'xl';
   showUnit?: boolean;
   frozen?: boolean;
+  disconnected?: boolean;
+  hasData?: boolean;         // ← nuevo: false = mostrar '--'
   onAlertTap?: () => void;
   goLiveSignal?: number;
-}> = ({ label, status, color = "text-white", size = 'normal', showUnit = true, frozen, onAlertTap, goLiveSignal }) => {
+}> = ({ label, status, color = "text-white", size = 'normal', showUnit = true, frozen, disconnected, hasData = true, onAlertTap, goLiveSignal }) => {
   const [dismissed, setDismissed] = React.useState(false);
   const dismissTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -71,7 +72,14 @@ const VitalCard: React.FC<{
   }, [frozen]);
 
   const stableStatus = { ...status, severity: stableSeverity.current as typeof status.severity };
-  const alertLabel = !frozen && !dismissed && !!onAlertTap ? getAlertLabel(label, stableStatus) : null;
+
+  // Mostrar '--' si no hay datos reales aún, si está desconectado, o si frozen sin datos
+  const showDash = !hasData || disconnected;
+
+  const alertLabel = !frozen && !dismissed && !!onAlertTap && !showDash
+    ? getAlertLabel(label, stableStatus)
+    : null;
+
   const isXL = size === 'xl';
 
   return (
@@ -92,7 +100,7 @@ const VitalCard: React.FC<{
             </div>
           )}
 
-          {/* Tooltip compacto — una sola línea, sin "tap to review" */}
+          {/* Tooltip compacto */}
           {alertLabel && (
             <div className={cn(
               "absolute z-20 pointer-events-auto",
@@ -102,7 +110,6 @@ const VitalCard: React.FC<{
                 "relative flex items-center gap-1 bg-rose-950/95 border border-rose-500/30 rounded-full shadow-xl backdrop-blur-sm",
                 isXL ? "px-2.5 py-1" : "px-2 py-0.5"
               )}>
-                {/* Label clickeable */}
                 <button
                   className="text-left"
                   onClick={(e) => { e.stopPropagation(); onAlertTap?.(); }}
@@ -114,7 +121,6 @@ const VitalCard: React.FC<{
                     {alertLabel}
                   </span>
                 </button>
-                {/* X */}
                 <button
                   className="flex items-center justify-center text-rose-500/60 hover:text-white transition-colors active:scale-95"
                   onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
@@ -125,16 +131,17 @@ const VitalCard: React.FC<{
             </div>
           )}
 
-          {/* Número */}
+          {/* Número — '--' hasta que lleguen datos reales */}
           <span className={cn(
             "font-light tracking-tight transition-colors duration-300",
             isXL ? 'text-7xl' : size === 'normal' ? 'text-4xl' : 'text-2xl',
-            frozen ? "text-slate-400" : color
+            frozen ? "text-slate-400" : showDash ? "text-slate-600" : color
           )}>
-            {status.value}
+            {showDash ? '--' : status.value}
           </span>
 
-          {showUnit && status.unit && (
+          {/* Unidad — solo visible cuando hay datos */}
+          {showUnit && status.unit && !showDash && (
             <span className={cn(
               "font-light transition-all duration-300 ml-1",
               isXL ? 'text-2xl' : size === 'normal' ? 'text-lg' : 'text-xs',
@@ -143,7 +150,8 @@ const VitalCard: React.FC<{
           )}
         </div>
 
-        {!frozen && (
+        {/* Flechas de severidad — solo con datos reales */}
+        {!frozen && !showDash && (
           <SeverityArrows
             trend={status.trend}
             severity={status.severity}
@@ -169,17 +177,19 @@ interface VitalsDisplayProps {
 }
 
 const VitalsDisplay: React.FC<VitalsDisplayProps> = ({ compact }) => {
-  const vitals = useStore(state => state.vitals);
+  const vitals        = useStore(state => state.vitals);
   const historyOffset = useStore(state => state.historyOffset);
-  const activeEvent = useStore(state => state.activeEventBanner);
-  const jumpToEvent = useStore(state => state.jumpToEvent);
-  const events = useStore(state => state.events);
-  const viewMode = useStore(state => state.viewMode);
-  const isAdvanced = viewMode === 'Advanced';
+  const activeEvent   = useStore(state => state.activeEventBanner);
+  const jumpToEvent   = useStore(state => state.jumpToEvent);
+  const events        = useStore(state => state.events);
+  const viewMode      = useStore(state => state.viewMode);
+  const isConnected   = useStore(state => state.isConnected);
+  const hasRealData   = useStore(state => state.hasRealData);  // ← flag nuevo
+  const isAdvanced    = viewMode === 'Advanced';
 
   const frozenVitals = React.useRef(vitals);
-  const wasFrozen = React.useRef(false);
-  const isFrozen = historyOffset > 0;
+  const wasFrozen    = React.useRef(false);
+  const isFrozen     = historyOffset > 0;
 
   if (isFrozen && !wasFrozen.current) {
     frozenVitals.current = vitals;
@@ -198,7 +208,6 @@ const VitalsDisplay: React.FC<VitalsDisplayProps> = ({ compact }) => {
     prevOffset.current = historyOffset;
   }, [historyOffset]);
 
-  // Salta al evento más reciente que coincida con los types dados
   const handleAlertTap = (eventTypes: string[]) => {
     const latest = events.find(e => eventTypes.includes(e.type));
     if (latest) {
@@ -231,6 +240,8 @@ const VitalsDisplay: React.FC<VitalsDisplayProps> = ({ compact }) => {
           color="text-white"
           size={compact ? 'sm' : 'normal'}
           frozen={isFrozen}
+          disconnected={!isConnected}
+          hasData={hasRealData}
           onAlertTap={isAdvanced ? () => handleAlertTap(['spo2_drop']) : undefined}
           goLiveSignal={goLiveSignal}
         />
@@ -239,6 +250,8 @@ const VitalsDisplay: React.FC<VitalsDisplayProps> = ({ compact }) => {
           status={displayVitals.bloodPressure}
           size={compact ? 'sm' : 'normal'}
           frozen={isFrozen}
+          disconnected={!isConnected}
+          hasData={hasRealData}
           onAlertTap={isAdvanced ? () => handleAlertTap(['hypertension', 'hypotension']) : undefined}
           goLiveSignal={goLiveSignal}
         />
@@ -252,6 +265,8 @@ const VitalsDisplay: React.FC<VitalsDisplayProps> = ({ compact }) => {
           size={compact ? 'normal' : 'xl'}
           showUnit={false}
           frozen={isFrozen}
+          disconnected={!isConnected}
+          hasData={hasRealData}
           onAlertTap={isAdvanced ? () => handleAlertTap(['tachycardia', 'bradycardia']) : undefined}
           goLiveSignal={goLiveSignal}
         />
@@ -265,6 +280,8 @@ const VitalsDisplay: React.FC<VitalsDisplayProps> = ({ compact }) => {
           color={!isFrozen && displayVitals.temperature.severity !== 'normal' ? "text-rose-400" : "text-white"}
           size={compact ? 'sm' : 'normal'}
           frozen={isFrozen}
+          disconnected={!isConnected}
+          hasData={hasRealData}
           onAlertTap={isAdvanced ? () => handleAlertTap(['hyperthermia', 'hypothermia']) : undefined}
           goLiveSignal={goLiveSignal}
         />
@@ -273,6 +290,8 @@ const VitalsDisplay: React.FC<VitalsDisplayProps> = ({ compact }) => {
           status={displayVitals.respirationRate}
           size={compact ? 'sm' : 'normal'}
           frozen={isFrozen}
+          disconnected={!isConnected}
+          hasData={hasRealData}
           onAlertTap={isAdvanced ? () => handleAlertTap(['tachypnea', 'bradypnea']) : undefined}
           goLiveSignal={goLiveSignal}
         />
