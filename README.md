@@ -1,10 +1,23 @@
-# Areteus Chestpad Website
-# Run 
+# Areteus Chestpad Device Web Interface
+
+## Overview
+The Areteus Chestpad device uses this web interface to display user activity data and provide a modern user experience.
+
+## Installation & Running
+```bash
+# Install dependencies
 npm install
+
+# Start development server
 npm run dev
+```
 
-simulator: node server.cjs
+### Local Simulator
+To run the local backend simulator, execute:
+```bash
+node server.cjs
+```
 
-# Deploy 
-[chestpad-website-areteus.vercel.app](https://chestpad-website-areteus.vercel.app/)
-
+## Deployment
+The application is deployed on Vercel and can be accessed at:
+https://chestpad-website-areteus.vercel.app/
