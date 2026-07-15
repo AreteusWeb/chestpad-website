@@ -2,6 +2,7 @@ FROM node:20-alpine
 RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY package.json .
+COPY package-lock.json .        
 RUN npm install
 COPY server.cjs .
 EXPOSE 8080

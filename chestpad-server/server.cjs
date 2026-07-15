@@ -2,16 +2,16 @@
  * ChestPad WebSocket Server — production + relay + GCS persistence
  * Receives real data from ESP32 according to Data_format.docx
  * Relays data to connected web clients (React app) in real time
- * NEW: Buffers 10-second chunks per device, converts raw ADC → mV,
- *      and writes them to GCS for the AI/preprocessing pipeline.
+ * Buffers 10-second chunks per device, converts raw ADC → mV,
+ * and writes them to GCS for the AI/preprocessing pipeline.
  *
- * CHANGE (2026-07-14): channel format updated as confirmed by Axel.
+ * CHANGE (2026-07-14): channel format updated per Axel's confirmation.
  * Before: channels: [[25 samples], [25 samples], ...] (array of arrays, positional)
- * Now: channels: [{ index, name, samples: [25 samples] }, ...] (array of objects,
- *       with explicit name/index — no longer guessing the order).
- * The 10 channels are always sent completely,
- * 25 samples/channel every 100 ms (250 Hz). The 11th channel (Temperature) is still
- * under development and is not sent.
+ * Now:    channels: [{ index, name, samples: [25 samples] }, ...] (array of objects,
+ *         with explicit index/name — order is no longer guessed).
+ * Confirmed with Axel (2026-07-14): all 10 channels are always sent,
+ * 25 samples/channel every 100ms (250Hz). The 11th channel (Temperature) is
+ * still in development and not sent yet.
  *
  * Install: npm install ws firebase-admin @google-cloud/storage
  * Run:     node server.cjs
@@ -23,24 +23,24 @@ const { Storage } = require('@google-cloud/storage');
 const http = require('http');
 
 // ─── Firebase Admin ───────────────────────────────────────────────────────────
-// In Cloud Run, credentials are obtained automatically from the environment.
+// On Cloud Run, credentials are obtained automatically from the environment.
 // No service account key is needed.
 admin.initializeApp({
   projectId: process.env.GOOGLE_CLOUD_PROJECT || 'areteus-chestpad-backend-dev',
 });
 
 // ─── GCS ──────────────────────────────────────────────────────────────────────
-// Like Firebase Admin, in Cloud Run the credentials are obtained
-// automatically from the service account — no key is needed.
+// Same as Firebase Admin — on Cloud Run, credentials are obtained automatically
+// from the service's service account, no key needed.
 const storage = new Storage();
 const BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'areteus-patch-ecg-raw';
 const bucket = storage.bucket(BUCKET_NAME);
 
 const PORT = process.env.PORT || 8080;
 
-// Normal HTTP server — responds to simple requests (Cloud Run health checks,
-// browser, etc.). The real WebSocket connections are
-// "upgraded" from here.
+// Plain HTTP server — responds to simple requests (Cloud Run health checks,
+// browser, etc). Real WebSocket connections are "upgraded" from this same
+// server.
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('ChestPad WS Server is running\n');
@@ -59,26 +59,26 @@ const devices = new Map();
 // Each ws has: ws.uid, ws.deviceMac (MAC without colons, for matching with devices)
 const webClients = new Set();
 
-// ─── Chunking buffers (10s) for GCS, per device ────────────────────────────
+// ─── Chunking buffers (10s) for GCS, per device ──────────────────────────────
 // chunkBuffers: deviceId -> { channelData: Map<index, {name, samples:[]}>, startTs, packetCount }
 const chunkBuffers = new Map();
 
 // Raw → mV conversion constants, confirmed by Axel (2026-07-13):
 // voltage_mV = (raw / ADC_VAL_MAX) * ADC_VAL_MAX_MV
-// ADC_VAL_MAX (8388607) is also the value reported by a channel with no sensor
-// connected (floating pin) — it should be treated as "not connected", not as
-// a real reading of 1200 mV.
+// ADC_VAL_MAX (8388607) is also the value reported by a channel with NO
+// sensor connected (floating pin) — it must be filtered out as "not
+// connected", not as an actual 1200mV reading.
 const ADC_VAL_MAX = 8388607;
 const ADC_VAL_MAX_MV = 1200;
 
-// 100 ms packets, 25 samples/channel each.
-// 250 Hz * 10 s = 2500 samples/channel = 100 packets of 25 samples.
+// 100ms packets, 25 samples/channel each.
+// 250Hz * 10s = 2500 samples/channel = 100 packets of 25 samples.
 const PACKETS_PER_CHUNK = 100;
 
-// CHANGE: channel names confirmed by Axel (2026-07-14).
-// ESP32 sends an explicit `name` for each channel. This
-// map is only used as a fallback in case a packet arrives without
-// a `name` (it should not happen under normal conditions).
+// CHANGE: channel names confirmed by Axel (2026-07-14). Order is no longer
+// guessed — the ESP32 sends an explicit `name` per channel. This map is
+// only used as a fallback in case a packet ever arrives without `name`
+// (shouldn't happen under normal conditions).
 const FALLBACK_CHANNEL_NAMES = {
   0: 'V6',
   1: 'V5',
@@ -90,7 +90,7 @@ const FALLBACK_CHANNEL_NAMES = {
   7: 'Lead I',
   8: 'Resp',
   9: 'PPG',
-  10: 'Temperature', // still under development and not sent yet
+  10: 'Temperature', // TODO: in development by Axel, not sent yet
 };
 
 // raw ADC value -> mV, or null if the channel has no sensor connected
@@ -101,7 +101,7 @@ function rawToMv(raw) {
 
 console.log(`\nChestPad WS Server running on port ${PORT}\n`);
 
-// ─── Accumulates 100 ms packets until a 10 s chunk is collected, then uploads it ────
+// ─── Accumulates 100ms packets until a 10s chunk is complete, then uploads it ─
 // CHANGE: channelsArr is now [{ index, name, samples: [...] }, ...]
 function onChannelsPacket(deviceId, timestamp, channelsArr) {
   let buf = chunkBuffers.get(deviceId);
@@ -115,7 +115,7 @@ function onChannelsPacket(deviceId, timestamp, channelsArr) {
     const name = ch.name || FALLBACK_CHANNEL_NAMES[idx] || `CH_${idx}`;
 
     if (!Array.isArray(ch.samples)) {
-      console.warn(`[WARN] Channel without valid samples, device=${deviceId} idx=${idx}`);
+      console.warn(`[WARN] Channel with invalid samples, device=${deviceId} idx=${idx}`);
       continue;
     }
 
@@ -130,7 +130,7 @@ function onChannelsPacket(deviceId, timestamp, channelsArr) {
   if (buf.packetCount >= PACKETS_PER_CHUNK) {
     flushChunkToGCS(deviceId, buf).catch(err => {
       console.error(`[GCS ERROR] device=${deviceId} | ${err.message}`);
-      // TODO: no retry/local persistence for now (deliberate decision,
+      // TODO: no retry/local persistence for now (conscious decision,
       // see pipeline proposal) — if the flush fails, that chunk is lost.
     });
     chunkBuffers.delete(deviceId);
@@ -138,8 +138,8 @@ function onChannelsPacket(deviceId, timestamp, channelsArr) {
 }
 
 async function flushChunkToGCS(deviceId, buf) {
-  // CHANGE: sort by channel index so the chunk is consistent
-  // regardless of the order in which channels arrived in each packet.
+  // CHANGE: sort by channel index so the chunk always comes out consistent
+  // regardless of the order channels arrived in within each packet.
   const sortedIndices = [...buf.channelData.keys()].sort((a, b) => a - b);
   const channel_labels = sortedIndices.map(i => buf.channelData.get(i).name);
   const data = sortedIndices.map(i => buf.channelData.get(i).samples.map(rawToMv));
@@ -182,7 +182,7 @@ wss.on('connection', (ws, req) => {
     if (isBinary) {
       if (ws.role !== 'device') return;
 
-      // Relay only to the web client that owns this device
+      // Relay only to the webclient that owns this device
       let relayed = 0;
       for (const client of webClients) {
         if (client.readyState === client.OPEN && client.deviceMac === ws.deviceId) {
@@ -191,8 +191,8 @@ wss.on('connection', (ws, req) => {
         }
       }
       console.log(`[BIN] device=${ws.deviceId} | bytes=${data.byteLength} | relay→${relayed} clients`);
-      // NOTE: auscultation audio does not go into the GCS/AI pipeline —
-      // Jennifer confirmed that the model only uses ECG signals. This binary
+      // NOTE: auscultation audio does NOT enter the GCS/AI pipeline —
+      // Jennifer confirmed the model only uses ECG signals. This binary
       // frame stays only in the live relay to the frontend, as before.
       return;
     }
@@ -219,7 +219,7 @@ wss.on('connection', (ws, req) => {
           ws.authenticated = true;
           ws.role          = 'webclient';
           ws.uid           = decoded.uid;
-          // Normalize MAC like devices (without colons, uppercase)
+          // Normalize MAC the same way as devices (no colons, uppercase)
           ws.deviceMac     = (msg.deviceMac ?? '').replace(/:/g, '').toUpperCase();
 
           webClients.add(ws);
@@ -251,7 +251,7 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // ── Auth without token or mac ─────────────────────────────────────────
+      // ── Auth without token or mac ──────────────────────────────────────────
       console.warn('[AUTH FAIL] No token or mac in auth message');
       ws.send(JSON.stringify({ type: 'auth_error', reason: 'missing_credentials' }));
       ws.close();
@@ -259,7 +259,7 @@ wss.on('connection', (ws, req) => {
     }
 
     // ── Multichannel telemetry → relay + GCS ───────────────────────────────
-    // msg.channels is now [{ index, name, samples }, ...]
+    // CHANGE: msg.channels is now [{ index, name, samples }, ...]
     if (msg.channels && ws.role === 'device') {
       const { timestamp, channels } = msg;
 
@@ -278,9 +278,9 @@ wss.on('connection', (ws, req) => {
       sess.packetCount++;
       sess.lastSeen = Date.now();
 
-      // Relay ONLY to the web client whose deviceMac matches this device
-      // (live behavior, unchanged — it continues sending raw values,
-      // not mV, so as not to break what the frontend already consumes)
+      // Relay ONLY to the webclient whose deviceMac matches this device
+      // (live behavior, unchanged — still sends raw values, not mV, so as
+      // not to break what the frontend already consumes)
       const payload = JSON.stringify({ timestamp, channels });
       let relayed = 0;
       for (const client of webClients) {
@@ -290,11 +290,11 @@ wss.on('connection', (ws, req) => {
         }
       }
 
-      // NEW: accumulate into the 10 s chunk and upload to GCS when complete
+      // NEW: accumulate into the 10s chunk and upload to GCS once complete
       onChannelsPacket(ws.deviceId, timestamp, channels);
 
       if (sess.packetCount % 10 === 0) {
-        // CHANGE: we no longer assume fixed positions [0] and [9] — we look them up by name
+        // CHANGE: we no longer assume fixed positions [0] and [9] — look up by name
         const v6 = channels.find(c => c.name === 'V6' || c.index === 0)?.samples?.[0] ?? 'N/A';
         const resp = channels.find(c => c.name === 'Resp' || c.index === 8)?.samples?.[0] ?? 'N/A';
         console.log(`[DATA] device=${ws.deviceId} | ts=${timestamp} | V6[0]=${v6} | Resp[0]=${resp} | channels=${channels.length} | relay→${relayed} clients`);
@@ -305,7 +305,7 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     if (ws.role === 'device') {
       devices.delete(ws.deviceId);
-      chunkBuffers.delete(ws.deviceId); // TODO: the partial chunk in progress is lost today; see the fault-tolerance note in the proposal
+      chunkBuffers.delete(ws.deviceId); // TODO: today the in-progress partial chunk is lost; see fault-tolerance note in the proposal
       console.log(`[-] DEVICE disconnected: ${ws.deviceId} | devices=${devices.size}`);
     } else if (ws.role === 'webclient') {
       webClients.delete(ws);
