@@ -1,4 +1,4 @@
-#OLD Areteus The Patch Device Web Interface
+# OLD Areteus Chestpatch Device Web Interface
 
 ## Overview
 Areteus The Patch device uses this web interface to display user activity data and provide a modern user experience.
