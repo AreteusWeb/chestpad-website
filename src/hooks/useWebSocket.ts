@@ -5,6 +5,24 @@
  *   1. Delete the section marked "SIMULATOR"
  *   2. Change WS_URL to the real IP of the device
  *   3. Done — the rest remains the same
+ *
+ * CHANGE (2026-07-20): real hardware now sends channels as
+ * [{ index, name, samples }, ...] instead of the old positional
+ * number[][] format the simulator still uses. handlePacket now supports
+ * BOTH shapes so the simulator keeps working unchanged while real-device
+ * data is parsed correctly.
+ *
+ * CHANGE (2026-07-20): real hardware provides 8 genuinely independent ECG
+ * leads (V6,V5,V4,V3,V2,V1,Lead II,Lead I) instead of the old placeholder
+ * (one signal scaled 4 ways). Ring buffers now go 0-9, matching the real
+ * device's channel indices exactly:
+ *   0=V6 1=V5 2=V4 3=V3 4=V2 5=V1 6=Lead II 7=Lead I 8=Resp 9=PPG
+ * There is no Temperature channel yet (still in development per Axel) and
+ * no Blood Pressure channel at all (BP was only ever simulated — the ESP32
+ * has no BP sensor). Because the simulator's OLD channel semantics
+ * (indices 6/7 = Temp/BP) collide with the real device's NEW semantics
+ * (indices 6/7 = Lead II/Lead I), vitals estimation now branches on
+ * `usingSimulatorRef` to read the correct ring for each mode.
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -19,20 +37,46 @@ const WS_URL = `wss://chestpad-ws-server-1048900719191.us-central1.run.app/ws`;
 // 1 hour @ 250Hz = 900,000 samples per channel
 const BUFFER_SIZE = 900_000;
 
-// Visible samples per channel
-const VIEW_SIZES = [750, 750, 750, 750, 150, 150, 50, 300];
-const DECIMATE = [1, 1, 1, 1, 5, 5, 1, 1];
+// CHANGE: real device channel names, in the exact index order confirmed by
+// Axel. Used both for the dropdown and to map lead name -> ring index.
+export const LEADS = ['Lead I', 'Lead II', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
 
-// Min/max ranges per channel for WaveformCanvas
+// Maps a lead's display name to the ring buffer index that holds its data
+// (matches the real device's channel index exactly, so no translation is
+// needed once a packet arrives).
+export const LEAD_CHANNEL_INDEX: Record<string, number> = {
+  V6: 0,
+  V5: 1,
+  V4: 2,
+  V3: 3,
+  V2: 4,
+  V1: 5,
+  'Lead II': 6,
+  'Lead I': 7,
+};
+
+const RESP_CHANNEL_INDEX = 8;
+const PPG_CHANNEL_INDEX = 9;
+const NUM_DEVICE_CHANNELS = 10; // 0-7 ECG leads, 8 Resp, 9 PPG
+
+// Visible samples per channel (indices 0-9, matching device channels above)
+const VIEW_SIZES = [750, 750, 750, 750, 750, 750, 750, 750, 150, 150];
+const DECIMATE = [1, 1, 1, 1, 1, 1, 1, 1, 5, 5];
+
+// Min/max ranges per channel for WaveformCanvas (used only as a fallback —
+// WaveformCanvas defaults to autoScale=true, so these mostly serve as
+// documentation of the expected raw ADC range for each signal type).
 export const CH_RANGES: [number, number][] = [
-  [-2_500_000, 2_500_000],  // ch0-3 ECG (int32)
-  [-2_500_000, 2_500_000],
-  [-2_500_000, 2_500_000],
-  [-2_500_000, 2_500_000],
-  [-8_388_607, 8_388_607],  // ch4 Pneumography
-  [0, 8_388_607],           // ch5 PPG
-  [3_400_000, 4_200_000],   // ch6 Temp (34-42C x 100k)
-  [-32_767, 32_767],        // ch7 Audio int16
+  [-2_500_000, 2_500_000],  // 0 V6  (ECG)
+  [-2_500_000, 2_500_000],  // 1 V5
+  [-2_500_000, 2_500_000],  // 2 V4
+  [-2_500_000, 2_500_000],  // 3 V3
+  [-2_500_000, 2_500_000],  // 4 V2
+  [-2_500_000, 2_500_000],  // 5 V1
+  [-2_500_000, 2_500_000],  // 6 Lead II
+  [-2_500_000, 2_500_000],  // 7 Lead I
+  [-8_388_607, 8_388_607],  // 8 Resp (pneumography)
+  [0, 8_388_607],           // 9 PPG
 ];
 
 // ─── Ring Buffer using Float32Array ───────────────────────────────────────────
@@ -131,6 +175,8 @@ function estimateSpO2(buf: Float32Array): number {
 
 /**
  * Extracts temperature in Celsius from samples.
+ * NOTE: real hardware does not send a Temperature channel yet (Axel:
+ * "in development"). This function is now only called in simulator mode.
  */
 function extractTemp(buf: Float32Array): number {
   if (buf.length === 0) return 36.6;
@@ -156,6 +202,9 @@ function estimateResp(buf: Float32Array): number {
 
 /**
  * Extracts Blood Pressure (BP) systolic/diastolic values from samples.
+ * NOTE: the real ESP32 has no BP sensor — this is only ever meaningful in
+ * simulator mode. In real-device mode this is never called; the UI shows
+ * '--' instead (see updateVitals call below).
  */
 function extractBp(buf: Float32Array): { sys: number, dia: number } | null {
   if (buf.length === 0) return null;
@@ -168,6 +217,10 @@ function extractBp(buf: Float32Array): { sys: number, dia: number } | null {
 
 // ─── SIMULATOR ────────────────────────────────────────────────────────────────
 // Delete this section when you connect the real device
+// NOTE: the simulator still uses the OLD 8-channel array format
+// (indices 0-3 = same ECG signal scaled 4 ways, 4=Resp, 5=PPG, 6=Temp,
+// 7=BP). handlePacket() below detects this shape automatically and keeps
+// supporting it, so nothing here needs to change for the real-device fix.
 
 type SimMode =
   | 'normal'
@@ -236,6 +289,8 @@ function buildSimPacket(t: number, mode: SimMode) {
   simState.spo2  = Math.min(100, Math.max(0, simState.spo2));
 
   const dt = 1 / 250;
+  // OLD 8-channel array format (unchanged) — indices 0-3 ecg variants,
+  // 4 resp, 5 ppg, 6 temp, 7 bp.
   const channels: number[][] = Array.from({ length: 8 }, () => []);
   for (let s = 0; s < 25; s++) {
     const ts = t + s * dt;
@@ -273,18 +328,47 @@ export const useWebSocket = () => {
     VIEW_SIZES.map(n => new Array(n).fill(0))
   );
 
-  const rings    = useRef<RingBuffer[]>(Array.from({ length: 8 }, () => new RingBuffer(BUFFER_SIZE)));
+  // CHANGE: 10 rings now (0-9), matching the real device's channel indices
+  // exactly. See file header comment for what each index means in each mode.
+  const rings    = useRef<RingBuffer[]>(Array.from({ length: NUM_DEVICE_CHANNELS }, () => new RingBuffer(BUFFER_SIZE)));
+
+  // CHANGE: binary auscultation audio now goes to its own dedicated ring
+  // instead of overwriting rings.current[7] (which used to be the
+  // simulator's fake BP channel, and is now real "Lead I" ECG data on the
+  // real device — pushing audio there would silently corrupt that lead).
+  const audioRing = useRef<RingBuffer>(new RingBuffer(BUFFER_SIZE));
+
   const wsRef    = useRef<WebSocket | null>(null);
   const simRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const simTime  = useRef(0);
 
+  // CHANGE: tracks whether the active data source is the simulator or a
+  // real device connection. Needed because ring indices 6/7 mean different
+  // things in each mode (Temp/BP in the simulator vs. Lead II/Lead I on
+  // the real device) — vitals estimation below reads from the correct
+  // source depending on this flag.
+  const usingSimulatorRef = useRef(false);
+
   // ── Process Incoming Packet ─────────────────────────────────────────────────
-  const handlePacket = useCallback((packet: { timestamp: number; channels: number[][] }) => {
+  // CHANGE: now supports BOTH channel shapes:
+  //   - old simulator shape: number[][] (positional array of arrays)
+  //   - new real-device shape: [{ index, name, samples }, ...]
+  const handlePacket = useCallback((packet: { timestamp: number; channels: any[] }) => {
     packet.channels.forEach((ch, i) => {
-      if (i >= 8) return;
-      const samples = Array.isArray(ch) ? ch : [ch];
-      const ring = rings.current[i];
-      for (const v of samples) ring.push(v);
+      if (Array.isArray(ch)) {
+        // Old simulator format — position in the array IS the channel index.
+        if (i >= rings.current.length) return;
+        const ring = rings.current[i];
+        for (const v of ch) ring.push(v);
+      } else if (ch && typeof ch === 'object' && Array.isArray(ch.samples)) {
+        // New real-device format — index is explicit, no guessing needed.
+        const idx = ch.index;
+        if (typeof idx !== 'number' || idx >= rings.current.length) return;
+        const ring = rings.current[idx];
+        for (const v of ch.samples) ring.push(v);
+      }
+      // Anything else (malformed channel entry) is silently skipped rather
+      // than crashing the render loop.
     });
   }, []);
 
@@ -341,17 +425,46 @@ export const useWebSocket = () => {
       if (vitalTick < 30) return;
       vitalTick = 0;
 
-      const ecg  = offsetSamples === 0 ? rings.current[0].slice(750)  : rings.current[0].sliceAt(750,  offsetSamples);
-      const ppg  = offsetSamples === 0 ? rings.current[5].slice(250)  : rings.current[5].sliceAt(250,  offsetSamples);
-      const resp = offsetSamples === 0 ? rings.current[4].slice(1500) : rings.current[4].sliceAt(1500, offsetSamples);
-      const temp = offsetSamples === 0 ? rings.current[6].slice(25)   : rings.current[6].sliceAt(25,   offsetSamples);
-      const bp   = offsetSamples === 0 ? rings.current[7].slice(25)   : rings.current[7].sliceAt(25,   offsetSamples);
+      // CHANGE: pick the correct ring per mode. Simulator keeps its old
+      // 8-channel semantics; the real device uses the new 10-channel
+      // mapping (Lead II is the clinical standard for rhythm strips, so
+      // it's used as the primary HR source on real hardware).
+      const isSim = usingSimulatorRef.current;
 
-      const hr     = estimateHR(ecg);
-      const spo2   = estimateSpO2(ppg);
-      const rr     = estimateResp(resp);
-      const tmp    = extractTemp(temp);
-      const bpData = extractBp(bp);
+      const ecgSourceIdx  = isSim ? 0 : LEAD_CHANNEL_INDEX['Lead II'];
+      const respSourceIdx = isSim ? 4 : RESP_CHANNEL_INDEX;
+      const ppgSourceIdx  = isSim ? 5 : PPG_CHANNEL_INDEX;
+
+      const ecg  = offsetSamples === 0 ? rings.current[ecgSourceIdx].slice(750)  : rings.current[ecgSourceIdx].sliceAt(750,  offsetSamples);
+      const ppg  = offsetSamples === 0 ? rings.current[ppgSourceIdx].slice(250)  : rings.current[ppgSourceIdx].sliceAt(250,  offsetSamples);
+      const resp = offsetSamples === 0 ? rings.current[respSourceIdx].slice(1500) : rings.current[respSourceIdx].sliceAt(1500, offsetSamples);
+
+      const hr   = estimateHR(ecg);
+      const spo2 = estimateSpO2(ppg);
+      const rr   = estimateResp(resp);
+
+      // CHANGE: Temperature and Blood Pressure have no real channel on the
+      // device yet (Temp is "in development" per Axel; BP never existed
+      // as a sensor). Only compute them from ring data in simulator mode —
+      // in real mode, use placeholders instead of misreading an ECG lead
+      // as if it were Temp/BP data.
+      let tmp: number;
+      let bpData: { sys: number; dia: number } | null;
+
+      if (isSim) {
+        const temp = offsetSamples === 0 ? rings.current[6].slice(25) : rings.current[6].sliceAt(25, offsetSamples);
+        const bp   = offsetSamples === 0 ? rings.current[7].slice(25) : rings.current[7].sliceAt(25, offsetSamples);
+        tmp = extractTemp(temp);
+        bpData = extractBp(bp);
+      } else {
+        // TODO: wire this up to a real Temperature channel once Axel adds
+        // it to the device (currently "in development"). Placeholder
+        // value kept numeric (36.6) rather than '--' because the store's
+        // `temperature.value` type looks like it expects a number — check
+        // useStore.ts if you'd rather show '--' here too, same as BP.
+        tmp = 36.6;
+        bpData = null; // No BP sensor exists on the real device — ever.
+      }
 
       const hrTrend  = getTrend(hr,  prevVitals.current.hr,   1);
       const spo2Trend = getTrend(spo2, prevVitals.current.spo2, 0.5);
@@ -394,15 +507,23 @@ export const useWebSocket = () => {
         },
       };
 
-      if (bpData) {
-        updates.bloodPressure = {
-          value: `${bpData.sys}/${bpData.dia}`,
-          trend: sysTrend,
-          severity: (bpData.sys > 140 || bpData.dia > 90) ? 'critical'
-                  : (bpData.sys < 90  || bpData.dia < 60) ? 'critical'
-                  : 'normal',
-        };
-      }
+      // CHANGE: always set bloodPressure (previously only set when
+      // bpData existed). In real-device mode bpData is always null now,
+      // so this shows '--' per what you confirmed — no BP sensor exists
+      // on the hardware.
+      updates.bloodPressure = bpData
+        ? {
+            value: `${bpData.sys}/${bpData.dia}`,
+            trend: sysTrend,
+            severity: (bpData.sys > 140 || bpData.dia > 90) ? 'critical'
+                    : (bpData.sys < 90  || bpData.dia < 60) ? 'critical'
+                    : 'normal',
+          }
+        : {
+            value: '--',
+            trend: 'stable',
+            severity: 'normal',
+          };
 
       updateVitals(updates);
 
@@ -430,6 +551,7 @@ export const useWebSocket = () => {
     // SIMULATOR — delete startSim() and its call in onclose when connecting the real device
     const startSim = () => {
       if (simRef.current) return;
+      usingSimulatorRef.current = true; // CHANGE: mark simulator as active
       setConnected(true);
       setConnectionStatus('Stable');
 
@@ -499,15 +621,17 @@ export const useWebSocket = () => {
 
       ws.onmessage = ({ data }) => {
         if (data instanceof ArrayBuffer) {
+          // CHANGE: audio now goes to its own ring, not rings.current[7]
+          // (which is real Lead I ECG data on the real device).
           const view = new DataView(data);
-          const ring = rings.current[7];
-          for (let i = 0; i < data.byteLength / 2; i++) ring.push(view.getInt16(i * 2, true));
+          for (let i = 0; i < data.byteLength / 2; i++) audioRing.current.push(view.getInt16(i * 2, true));
         } else {
           try {
             const msg = JSON.parse(data as string);
             if (msg.channels) handlePacket(msg);
 
             if (msg.type === 'auth_ok') {
+              usingSimulatorRef.current = false; // CHANGE: real device confirmed, not simulator
               setConnected(true);
               setConnectionStatus('Stable');
             }
@@ -551,5 +675,5 @@ export const useWebSocket = () => {
     }
   }, [simulationMode]);
 
-  return { waveforms };
+  return { waveforms, usingSimulator: usingSimulatorRef.current };
 };
